@@ -159,6 +159,10 @@ Trois profils de commande, pas un booléen de plus.
 
 `From` n'a pas à être égal à l'identité du certificat : un envoi pour le compte d'une boîte fonctionnelle est réel. Le profil `org` exige l'égalité, le profil `lab` non. Le documenter dans la sortie, pas le deviner.
 
+Offre itsme. La question s'affiche dans l'application itsme, sur le téléphone, avec l'empreinte du message. Ce n'est pas un bouton de cette page : le programme qui prépare le mail peut cacher un bouton et répondre à la place de la personne. Une valeur `itsme` envoyée par l'appelant est ignorée. Seul le résultat renvoyé par l'application compte.
+
+Oui, dans l'application : une approbation par message. Ce qui voyage est la signature qualifiée et le certificat, pas le jeton, pas le numéro de registre national. `signer.assurance` vaut `qualified`. Non, dans l'application : la preuve part comme aujourd'hui. Aucun champ, aucun avertissement, aucune relance. Le destinataire ne sait pas que la question a été posée. On ne commente pas le refus. itsme est le premier émetteur, pas le nom du champ.
+
 ## 10. Phase 4 — traversée
 
 Mesurer, ne pas assouplir le hash pour faire passer le test.

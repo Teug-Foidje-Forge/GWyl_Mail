@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 from .cli import cmd_check, cmd_sign
 from .doctor import cmd_doctor
+from .itsme import answer_from_caller
 
 MAX_BODY = 20 * 1024 * 1024
 STATIC = Path(__file__).parent / "ui_static" / "index.html"
@@ -85,13 +86,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "X-GWyl-Client, Content-Type")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
-    def _send(self, status: int, body: bytes, content_type: str) -> None:
+    def _send(
+        self, status: int, body: bytes, content_type: str, extra: dict[str, str] | None = None
+    ) -> None:
         self.send_response(status)
         self._cors()
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        for key, value in (extra or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -204,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
             if rc != 0 or not out.exists():
                 self._json(422, {"error": "sign_refused", "exit_code": rc, "log": text[-2000:]})
                 return
+            # A caller-supplied itsme answer is not the user. Discard it.
+            answer_from_caller(fields.get("itsme"))
             self._send(200, out.read_bytes(), "message/rfc822")
 
 
