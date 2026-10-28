@@ -26,6 +26,7 @@ from .eml_io import (
     strip_proof,
 )
 from .ots_manager import OTSManager
+from .proof_route import store_package
 
 
 def cmd_canonical(args: argparse.Namespace) -> int:
@@ -228,6 +229,7 @@ def cmd_sign(args: argparse.Namespace) -> int:
             sig_obj["bundle"] = BUNDLE_FILENAME
 
     signed = inject_proof(data, envelope, ots_bytes=ots_bytes, bundle_bytes=bundle_bytes)
+    store_package(envelope, ots_bytes=ots_bytes, bundle_bytes=bundle_bytes)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(signed)
@@ -288,6 +290,26 @@ def cmd_check(args: argparse.Namespace) -> int:
             )
         )
         return 1
+    if extracted.ambiguous_route:
+        print(
+            json.dumps(
+                {
+                    "error": "ambiguous_route",
+                    "details": "proof references disagree; refusing to guess",
+                }
+            )
+        )
+        return 1
+    if extracted.not_local:
+        print(
+            json.dumps(
+                {
+                    "error": "proof_not_local",
+                    "details": "attachments are gone and this machine has no copy of the proof",
+                }
+            )
+        )
+        return 1
 
     inbox = Path(".gwyl_mail/inbox") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     inbox.mkdir(parents=True, exist_ok=True)
@@ -313,6 +335,14 @@ def cmd_check(args: argparse.Namespace) -> int:
         profile_override=getattr(args, "profile_override", None),
         lookup_dir=str(inbox),
         allow_degraded=bool(getattr(args, "allow_degraded", False)),
+        route_reasons=[
+            reason
+            for reason, present in (
+                ("proof_recovered_locally", extracted.recovered),
+                ("injected_ref_ignored", extracted.injected_ref),
+            )
+            if present
+        ],
     )
     return cmd_verify(verify_args)
 
@@ -330,6 +360,8 @@ REASON_DESCRIPTIONS: Dict[str, str] = {
     "plain_ok": "le texte brut et les pièces jointes correspondent à la seconde empreinte ; elle ne décide pas",
     "plain_mismatch": "le texte brut ou une pièce jointe diffère de la seconde empreinte",
     "html_differs": "le texte brut correspond encore ; c'est le HTML qui a changé. Le message reste refusé",
+    "proof_recovered_locally": "les pièces de preuve ont été retirées ; la copie locale adressée par le hash a été utilisée",
+    "injected_ref_ignored": "un en-tête de référence ne correspond pas à la preuve jointe ; l'en-tête a été ignoré",
     "canonical_error": "impossible de lire ou canoniser le message EML",
     "profile_missing_assumed_strict": "la preuve n'indique pas son profil, 'strict' supposé (preuve ancienne)",
     "profile_override": "profil de vérification forcé manuellement via --profile-override",
@@ -716,6 +748,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         except Exception as e:
             reasons.append("coherence_unknown")
             coherence_details = {"error": f"timestamp_parse_failed: {e!s}"}
+
+    for extra in getattr(args, "route_reasons", None) or []:
+        reasons.append(extra)
 
     # Trust level
     if ots_ok:

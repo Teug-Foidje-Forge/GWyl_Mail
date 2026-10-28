@@ -27,12 +27,21 @@ from email.message import EmailMessage
 from email.parser import BytesParser
 from typing import Any, Dict, Optional
 
+from .proof_route import (
+    REF_FILENAME,
+    REF_HEADER,
+    format_ref,
+    load_package,
+    parse_ref,
+    proof_identity,
+)
+
 PROOF_HEADER = "X-GWyl-Proof"
 PROOF_VERSION = "v1"
 PROOF_JSON_FILENAME = "gwylproof.json"
 OTS_FILENAME = "gwylproof.ots"
 BUNDLE_FILENAME = "gwylbundle.json"
-PROOF_FILENAMES = {PROOF_JSON_FILENAME, OTS_FILENAME, BUNDLE_FILENAME}
+PROOF_FILENAMES = {PROOF_JSON_FILENAME, OTS_FILENAME, BUNDLE_FILENAME, REF_FILENAME}
 
 
 @dataclass
@@ -43,6 +52,10 @@ class ExtractedProof:
     ots_bytes: Optional[bytes] = None
     bundle_bytes: Optional[bytes] = None
     ambiguous: bool = False
+    not_local: bool = False
+    ambiguous_route: bool = False
+    recovered: bool = False
+    injected_ref: bool = False
 
 
 def _parse(eml_bytes: bytes) -> EmailMessage:
@@ -79,6 +92,18 @@ def inject_proof(
             bundle_bytes, maintype="application", subtype="json", filename=BUNDLE_FILENAME
         )
 
+    ref = format_ref(envelope, ots_bytes)
+    if ref is not None:
+        msg.add_attachment(
+            (ref + "\n").encode("ascii"),
+            maintype="application",
+            subtype="gwyl-proof-ref",
+            filename=REF_FILENAME,
+        )
+        if REF_HEADER in msg:
+            del msg[REF_HEADER]
+        msg[REF_HEADER] = ref
+
     del msg[PROOF_HEADER]  # idempotent re-sign
     msg[PROOF_HEADER] = PROOF_VERSION
     out = msg.as_bytes()
@@ -92,6 +117,23 @@ def _parts_named(msg: EmailMessage, filename: str) -> list[Any]:
 def _payload_bytes(part: Any) -> Optional[bytes]:
     raw = part.get_payload(decode=True)
     return raw if isinstance(raw, bytes) else None
+
+
+def _reference_hashes(msg: EmailMessage) -> list[str]:
+    """Hashes named by the header copy and by the MIME reference part."""
+    found: list[str] = []
+    for value in msg.get_all(REF_HEADER) or []:
+        parsed = parse_ref(str(value))
+        if parsed is not None:
+            found.append(parsed["sha256"])
+    for part in _parts_named(msg, REF_FILENAME):
+        raw = _payload_bytes(part)
+        if raw is None:
+            continue
+        parsed = parse_ref(raw.decode("ascii", errors="replace"))
+        if parsed is not None:
+            found.append(parsed["sha256"])
+    return found
 
 
 def extract_proof(eml_bytes: bytes) -> Optional[ExtractedProof]:
@@ -108,7 +150,8 @@ def extract_proof(eml_bytes: bytes) -> Optional[ExtractedProof]:
 
     proof_parts = _parts_named(msg, PROOF_JSON_FILENAME)
     if not proof_parts:
-        return None
+        return _recover_from_reference(msg)
+
     if (
         len(proof_parts) > 1
         or len(_parts_named(msg, OTS_FILENAME)) > 1
@@ -128,7 +171,34 @@ def extract_proof(eml_bytes: bytes) -> Optional[ExtractedProof]:
     bundle_parts = _parts_named(msg, BUNDLE_FILENAME)
     ots_bytes = _payload_bytes(ots_parts[0]) if ots_parts else None
     bundle_bytes = _payload_bytes(bundle_parts[0]) if bundle_parts else None
-    return ExtractedProof(envelope=envelope, ots_bytes=ots_bytes, bundle_bytes=bundle_bytes)
+    _, content_hash, _ = proof_identity(envelope)
+    refs = _reference_hashes(msg)
+    injected = bool(content_hash) and any(ref != content_hash for ref in refs)
+    return ExtractedProof(
+        envelope=envelope,
+        ots_bytes=ots_bytes,
+        bundle_bytes=bundle_bytes,
+        injected_ref=injected,
+    )
+
+
+def _recover_from_reference(msg: EmailMessage) -> Optional[ExtractedProof]:
+    """Proof attachments are gone. Follow the reference, or report why not."""
+    refs = _reference_hashes(msg)
+    if not refs:
+        return None
+    if len(set(refs)) != 1:
+        return ExtractedProof(envelope={}, ambiguous_route=True)
+    loaded = load_package(refs[0])
+    if loaded is None:
+        return ExtractedProof(envelope={}, not_local=True)
+    envelope, ots_bytes, bundle_bytes = loaded
+    return ExtractedProof(
+        envelope=envelope,
+        ots_bytes=ots_bytes,
+        bundle_bytes=bundle_bytes,
+        recovered=True,
+    )
 
 
 def strip_proof(eml_bytes: bytes) -> bytes:
@@ -142,6 +212,9 @@ def strip_proof(eml_bytes: bytes) -> bytes:
     changed = False
     if msg.get(PROOF_HEADER) is not None:
         del msg[PROOF_HEADER]
+        changed = True
+    if REF_HEADER in msg:
+        del msg[REF_HEADER]
         changed = True
     if _strip_named_parts(msg):
         changed = True

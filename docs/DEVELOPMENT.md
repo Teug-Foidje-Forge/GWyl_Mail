@@ -107,7 +107,8 @@ Trois supports du même payload signé :
 | Support | Contenu | Rôle |
 |---|---|---|
 | Pièces jointes actuelles | Preuve, timbre, bundle | Vérification sans réseau |
-| En-tête `GWyl-Proof-Ref` | Référence courte | Survivre quand les pièces sont retirées |
+| Partie MIME `gwylproof.ref` | La même ligne que l'en-tête | Support durable : un relais conforme ne modifie pas le corps |
+| En-tête `GWyl-Proof-Ref` | Référence courte | Copie, pour le cas où les pièces sont retirées |
 | Copie locale adressée par le hash | Le même paquet | Récupération |
 
 En-tête, une seule ligne, ASCII :

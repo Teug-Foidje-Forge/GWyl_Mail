@@ -205,7 +205,7 @@ def _normalize_text(content: str) -> bytes:
 
 # Proof attachments are not message content. They are stripped before verify,
 # and ignored here so a re-parse of a signed message cannot hash them twice.
-_PROOF_FILENAMES = {"gwylproof.json", "gwylproof.ots", "gwylbundle.json"}
+_PROOF_FILENAMES = {"gwylproof.json", "gwylproof.ots", "gwylbundle.json", "gwylproof.ref"}
 
 
 def _visible_text_parts(msg: EmailMessage) -> List[EmailMessage]:
