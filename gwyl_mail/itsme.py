@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """itsme is offered on the phone, not by the program that sends the mail.
 
-Both answers are signed in the itsme application, over the canonical hash.
-A refusal is allowed. An unsigned refusal is not a refusal: the local
-program could have invented it.
+Both answers are signed in the itsme application. That signature defines the
+sender either way. Only an acceptance generates a proof for the recipient.
+A refusal is signed, attested, and kept off the message.
 """
 
 from __future__ import annotations
@@ -27,17 +27,32 @@ def choice_payload(result: str, content_hash: str) -> bytes:
 def apply_app_result(result: str, content_hash: str, signature: bytes) -> dict[str, str]:
     """Record a choice the itsme application signed.
 
-    Acceptance and refusal both require that signature. The refusal signs
-    the refusal itself, tied to this hash. It does not sign the message.
+    The signature defines the sender either way. Acceptance produces a
+    content proof and that proof is what the recipient receives. Refusal
+    produces no proof: the message goes out unsigned. The sender remains
+    attested, because the refusal itself was signed.
     """
     if not signature:
         raise ValueError("unsigned itsme choice")
+    accepted = result == "accepted"
     payload = choice_payload(result, content_hash)
     return {
         "choice": result,
         "content_hash": content_hash,
         "shown_on": "itsme-app",
-        "signs": "content" if result == "accepted" else "refusal",
+        "identity": "attested",
+        "signs": "content" if accepted else "refusal",
+        "proof_generated": "true" if accepted else "false",
+        "transmitted": "true" if accepted else "false",
         "signed_payload": payload.decode("ascii"),
         "signature": signature.hex(),
     }
+
+
+def proof_for_recipient(record: dict[str, str]) -> dict[str, str] | None:
+    """The object that travels with the mail. Nothing, when the sender refused."""
+    if record.get("identity") != "attested" or not record.get("signature"):
+        raise ValueError("sender is not attested")
+    if record.get("proof_generated") != "true":
+        return None
+    return record

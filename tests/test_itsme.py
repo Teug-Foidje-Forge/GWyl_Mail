@@ -3,7 +3,12 @@
 
 import pytest
 
-from gwyl_mail.itsme import answer_from_caller, apply_app_result, choice_payload
+from gwyl_mail.itsme import (
+    answer_from_caller,
+    apply_app_result,
+    choice_payload,
+    proof_for_recipient,
+)
 
 HASH = "ab" * 32
 
@@ -14,18 +19,22 @@ def test_caller_cannot_accept_or_refuse() -> None:
     assert answer_from_caller(None) is None
 
 
-def test_refusal_is_signed_and_bound_to_the_hash() -> None:
+def test_refusal_attests_the_sender_and_generates_no_proof() -> None:
     signed = apply_app_result("refused", HASH, b"sig-from-app")
-    assert signed["choice"] == "refused"
+    assert signed["identity"] == "attested"
     assert signed["signs"] == "refusal"
-    assert signed["content_hash"] == HASH
+    assert signed["proof_generated"] == "false"
+    assert signed["transmitted"] == "false"
+    assert proof_for_recipient(signed) is None
     assert "choice=refused" in signed["signed_payload"]
-    assert signed["shown_on"] == "itsme-app"
 
 
-def test_acceptance_signs_the_content_not_a_refusal() -> None:
+def test_acceptance_signs_the_content_and_sends_the_proof() -> None:
     signed = apply_app_result("accepted", HASH, b"sig-from-app")
+    assert signed["identity"] == "attested"
     assert signed["signs"] == "content"
+    assert signed["proof_generated"] == "true"
+    assert proof_for_recipient(signed) == signed
     assert choice_payload("accepted", HASH) != choice_payload("refused", HASH)
 
 

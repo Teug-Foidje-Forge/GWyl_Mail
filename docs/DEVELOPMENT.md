@@ -162,7 +162,7 @@ Trois profils de commande, pas un booléen de plus.
 
 Offre itsme. La question s'affiche dans l'application itsme, sur le téléphone, avec l'empreinte du message. Ce n'est pas un bouton de cette page : le programme qui prépare le mail peut cacher un bouton et répondre à la place de la personne. Une valeur `itsme` envoyée par l'appelant est ignorée.
 
-Les deux réponses sont signées dans l'application, sur cette empreinte. Oui : la signature porte sur le contenu, et `signer.assurance` vaut `qualified`. Ce qui voyage est cette signature et le certificat, pas le jeton, pas le numéro de registre national. Non : la personne signe le refus, lié à la même empreinte. Le message part quand même. Le refus signé voyage avec la preuve. Il ne signe pas le contenu, et il ne s'accompagne d'aucun commentaire. Un refus sans cette signature n'est pas un refus. itsme est le premier émetteur, pas le nom du champ.
+Les deux réponses sont signées dans l'application, sur cette empreinte. L'identité de l'expéditeur est définie dans les deux cas, puisque le refus se signe aussi. Oui : la preuve du contenu est générée, `signer.assurance` vaut `qualified`, et elle voyage avec le certificat. Pas le jeton, pas le numéro de registre national. Non : la preuve n'est pas générée. Le destinataire reçoit le message non signé. L'expéditeur reste attesté par la signature du refus, qui ne part pas avec le message. Un refus sans cette signature n'est pas un refus. itsme est le premier émetteur, pas le nom du champ.
 
 ## 10. Phase 4 — traversée
 
