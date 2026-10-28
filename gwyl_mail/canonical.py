@@ -193,24 +193,66 @@ def canonicalize_headers(msg: EmailMessage, profile: str = "strict") -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-def canonicalize_body(msg: EmailMessage) -> bytes:
-    # Prefer text/plain, else text/html as-is (V0 strict)
-    if isinstance(msg, EmailMessage):
-        body = msg.get_body(preferencelist=("plain", "html"))
-        if not body:
-            return b""
-        content = body.get_content()
-    else:
-        return b""
-
+def _normalize_text(content: str) -> bytes:
     content = content.replace("\r\n", "\n").replace("\r", "\n")
     lines = [line.rstrip() for line in content.split("\n")]
     normalized = "\n".join(lines)
     if normalized and not normalized.endswith("\n"):
         normalized += "\n"
-    # Unicode NFC normalization
     normalized = unicodedata.normalize("NFC", normalized)
     return normalized.encode("utf-8")
+
+
+# Proof attachments are not message content. They are stripped before verify,
+# and ignored here so a re-parse of a signed message cannot hash them twice.
+_PROOF_FILENAMES = {"gwylproof.json", "gwylproof.ots", "gwylbundle.json"}
+
+
+def _visible_text_parts(msg: EmailMessage) -> List[EmailMessage]:
+    """Non-attachment text/plain and text/html parts, in document order.
+
+    A multipart/alternative message contributes BOTH the plain part and the
+    HTML part. Hashing only the preferred body let a rewritten HTML part
+    pass verification unnoticed.
+    """
+    found: List[EmailMessage] = []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_content_disposition() == "attachment":
+            continue
+        filename = part.get_filename()
+        if filename in _PROOF_FILENAMES:
+            continue
+        if part.get_content_type() in ("text/plain", "text/html"):
+            found.append(part)
+    return found
+
+
+def canonicalize_body(msg: EmailMessage) -> bytes:
+    # Single visible part: byte-compatible with gwyl-canonical-v0.2.
+    # Several visible parts (plain + HTML): every one is covered, labeled
+    # by content type so two different alternatives cannot collide.
+    parts = _visible_text_parts(msg) if isinstance(msg, EmailMessage) else []
+    if len(parts) <= 1:
+        if isinstance(msg, EmailMessage):
+            body = msg.get_body(preferencelist=("plain", "html"))
+            if not body:
+                return b""
+            content = body.get_content()
+            if not isinstance(content, str):
+                return b""
+            return _normalize_text(content)
+        return b""
+
+    chunks: List[bytes] = []
+    for part in parts:
+        content = part.get_content()
+        if not isinstance(content, str):
+            continue
+        chunks.append(f"part:{part.get_content_type()}\n".encode("utf-8"))
+        chunks.append(_normalize_text(content))
+    return b"".join(chunks)
 
 
 def canonicalize_attachments(msg: EmailMessage) -> List[bytes]:

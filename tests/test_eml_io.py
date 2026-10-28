@@ -134,13 +134,16 @@ def test_sign_then_check_roundtrip(monkeypatch, tmp_path: Path, capsys):
     # Portable references inside the signed payload
     assert inner["opentimestamps"]["proof_file"] in (None, "gwylproof.ots")
 
-    # Non-strict check passes (canonical ok), unsigned envelope reported
+    # Unsigned envelope is refused unless the recipient opts in.
     rc = cli.cmd_check(_check_args(signed))
-    assert rc == 0
+    assert rc == 1
     out = json.loads(capsys.readouterr().out)
     assert out["canonical"] is True
     assert out["dsse_signed"] is False
     assert "dsse_unsigned_envelope" in out["reasons"]
+
+    rc = cli.cmd_check(_check_args(signed, allow_degraded=True))
+    assert rc == 0
 
 
 def test_check_detects_body_tampering(monkeypatch, tmp_path: Path, capsys):
@@ -179,7 +182,7 @@ def test_check_survives_mta_mutations(monkeypatch, tmp_path: Path, capsys):
     )
     (tmp_path / "received.eml").write_bytes(received)
 
-    rc = cli.cmd_check(_check_args(tmp_path / "received.eml"))
+    rc = cli.cmd_check(_check_args(tmp_path / "received.eml", allow_degraded=True))
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["canonical"] is True

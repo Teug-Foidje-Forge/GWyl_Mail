@@ -9,7 +9,7 @@ Système de courrier vérifié avec:
 - Privacy by design (minimal disclosure)
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __author__ = "Zack, Claude, ChatGPT"
 __license__ = "GPL-3.0-only"
 

@@ -182,7 +182,7 @@ def test_verify_dsse_unsigned_envelope_is_valid_compat():
         "signatures": [],
     }
     verified, proof, err = dsse.verify_proof_dsse(envelope)
-    assert verified is True and err is None
+    assert verified is False and err == "unsigned_envelope"
     assert proof["message_id"] == "mid123"
 
 

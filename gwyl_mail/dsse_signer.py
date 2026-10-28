@@ -147,12 +147,9 @@ def verify_proof_dsse(
 
     Returns:
         (verified, proof_dict, error_message)
-        - verified: True if signature valid or unsigned
-        - proof_dict: Extracted proof JSON
-        - error_message: Error details if verification failed
-
-    Note: Unsigned envelopes (empty signatures) are considered valid
-    for backward compatibility.
+        - verified: True only when a signature is present and valid
+        - proof_dict: Extracted proof JSON (also returned for an unsigned envelope)
+        - error_message: "unsigned_envelope" when no signature is present
     """
     try:
         # Extract payload
@@ -175,9 +172,10 @@ def verify_proof_dsse(
         # Extract signatures
         signatures = envelope.get("signatures", [])
 
-        # If no signatures, treat as unsigned (backward compat)
+        # No signature: the payload is readable, but it is NOT verified.
+        # Callers must refuse this unless the user opted into a degraded proof.
         if not signatures:
-            return True, proof, None
+            return False, proof, "unsigned_envelope"
 
         # Verify first signature with cosign
         if not _cosign_available():

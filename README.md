@@ -2,9 +2,9 @@
 
 **Privacy Infrastructure Layer pour Email**
 
-Version: 0.1.0 (PoC)
+Version: 0.3.1
 License: GPL-3.0-only
-Status: Development
+Status: Alpha — noyau mesuré, interface locale, pas encore un client mail
 
 ---
 
@@ -78,23 +78,22 @@ Content Hash (SHA-256)
 - ✅ KPIs PoC
 - ✅ Test Vectors
 
-### Phase 1: Implémentation Core (en cours)
-- ⏳ Module canonicalisation (gwyl_mail/canonical.py)
-- ⏳ Module Sigstore timestamp (gwyl_mail/sigstore_timestamp.py)
-- ⏳ Module OTS manager (gwyl_mail/ots_manager.py)
-- ⏳ Module dual proof (gwyl_mail/dual_proof.py)
-- ⏳ Module identity policy (gwyl_mail/identity_policy.py)
+### Phase 1: Implémentation Core ✅
+- ✅ Canonicalisation, y compris texte et HTML quand les deux sont présents (`gwyl-canonical-v0.3`, un seul corps reste compatible v0.2)
+- ✅ Sigstore, OpenTimestamps, preuve DSSE, politique d'identité
+- ✅ La preuve voyage dans le `.eml` (`sign` / `check`)
 
-### Phase 2: CLI & Tests
-- ⏳ CLI send/verify
-- ⏳ Tests unitaires
-- ⏳ Tests d'intégration (Gmail, Outlook, Postfix)
-- ⏳ Validation KPIs
+### Phase 2: CLI, interface, tests ✅
+- ✅ CLI, `gwyl-mail doctor`, `gwyl-mail ui` (127.0.0.1 seulement)
+- ✅ Extensions navigateur et Thunderbird (`extensions/`)
+- ✅ Tests unitaires et tests adversariaux
+- ⏳ Interop Gmail et Outlook encore manuelle
 
 ### Phase 3: Pilote
-- ⏳ Déploiement pilote (10 utilisateurs, 1 mois)
-- ⏳ Monitoring & métriques
-- ⏳ Feedback & ajustements
+- ⏳ Tag et recrutement de testeurs
+- ⏳ Confirmation OpenTimestamps sur 48 h, Sigstore avec OIDC réel
+
+Une preuve sans signature, ou dont l'identité demandée ne correspond pas au certificat, est refusée. `--allow-degraded` est l'opt-in explicite.
 
 ---
 

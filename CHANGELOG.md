@@ -9,6 +9,20 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-28
+
+### Changé
+- Le hash couvre chaque partie visible `text/plain` et `text/html`. Un message à un seul corps reste identique à `gwyl-canonical-v0.2`. Les nouvelles preuves portent `gwyl-canonical-v0.3`.
+- `verify` et `check` refusent une enveloppe DSSE sans signature, sauf `--allow-degraded`.
+- Une identité demandée différente de celle du certificat est refusée à la création, sauf `--allow-degraded`.
+- Deux pièces jointes de preuve dans le même message sont refusées (`ambiguous_proof`).
+- Les URL du paquet pointent vers `Teug-Foidje-Forge/GWyl_Mail`.
+
+### Ajouté
+- `gwyl-mail ui` : interface locale sur 127.0.0.1.
+- Extensions navigateur (MV3) et Thunderbird 115 dans `extensions/`.
+- `tests/test_adversarial.py`.
+
 ## [0.3.0] - 2026-09-17
 
 ### Sprint 10: KPIs mesurés & préparation pilote (2026-09-17)

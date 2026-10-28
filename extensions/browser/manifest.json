@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "GWyl Mail — vérifier",
+  "version": "0.3.1",
+  "description": "Envoie un .eml à l'interface locale GWyl Mail pour vérification.",
+  "action": {
+    "default_title": "Vérifier un message GWyl",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": ["http://127.0.0.1:8765/*"]
+}

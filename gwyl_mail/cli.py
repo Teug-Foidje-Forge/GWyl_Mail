@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from .canonical import GWylCanonical
 from .doctor import cmd_doctor
 from .dsse_signer import extract_proof_from_dsse, verify_proof_dsse
-from .dual_proof import create_proof
+from .dual_proof import SignerIdentityError, create_proof
 from .eml_io import (
     BUNDLE_FILENAME,
     OTS_FILENAME,
@@ -100,8 +100,28 @@ def cmd_proof(args: argparse.Namespace) -> int:
         return 2
     if missing and allow_degraded:
         _print_degraded_banner(missing)
+    if not use_dsse and not allow_degraded:
+        print(
+            "ERROR: refusing an unsigned proof (--no-dsse). Pass --allow-degraded to opt in.",
+            file=sys.stderr,
+        )
+        return 2
 
-    proof = create_proof(msg, identity=args.identity, dsse=use_dsse, profile=profile)
+    try:
+        proof = create_proof(
+            msg,
+            identity=args.identity,
+            dsse=use_dsse,
+            profile=profile,
+            allow_identity_mismatch=allow_degraded,
+        )
+    except SignerIdentityError as e:
+        print(f"ERROR: refusing proof, signer identity mismatch: {e}", file=sys.stderr)
+        print(
+            "The OIDC session is the effective signer. Re-login, or pass --allow-degraded.",
+            file=sys.stderr,
+        )
+        return 2
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(proof, ensure_ascii=False, indent=2))
@@ -167,15 +187,30 @@ def cmd_sign(args: argparse.Namespace) -> int:
         return 2
     if missing and allow_degraded:
         _print_degraded_banner(missing)
+    if not use_dsse and not allow_degraded:
+        print(
+            "ERROR: refusing to embed an unsigned proof (--no-dsse). Pass --allow-degraded to opt in.",
+            file=sys.stderr,
+        )
+        return 2
 
-    envelope, artifacts = create_proof(
-        msg,
-        identity=args.identity,
-        dsse=use_dsse,
-        profile=profile,
-        portable=True,
-        return_artifacts=True,
-    )
+    try:
+        envelope, artifacts = create_proof(
+            msg,
+            identity=args.identity,
+            dsse=use_dsse,
+            profile=profile,
+            portable=True,
+            return_artifacts=True,
+            allow_identity_mismatch=allow_degraded,
+        )
+    except SignerIdentityError as e:
+        print(f"ERROR: refusing to sign, signer identity mismatch: {e}", file=sys.stderr)
+        print(
+            "The OIDC session is the effective signer. Re-login, or pass --allow-degraded.",
+            file=sys.stderr,
+        )
+        return 2
 
     # Embed the artifacts the verification will need on the recipient side
     ots_bytes: Optional[bytes] = None
@@ -243,6 +278,16 @@ def cmd_check(args: argparse.Namespace) -> int:
             )
         )
         return 1
+    if extracted.ambiguous:
+        print(
+            json.dumps(
+                {
+                    "error": "ambiguous_proof",
+                    "details": "more than one GWyl proof attachment; refusing to guess",
+                }
+            )
+        )
+        return 1
 
     inbox = Path(".gwyl_mail/inbox") / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     inbox.mkdir(parents=True, exist_ok=True)
@@ -267,6 +312,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         allow_issuer=getattr(args, "allow_issuer", None),
         profile_override=getattr(args, "profile_override", None),
         lookup_dir=str(inbox),
+        allow_degraded=bool(getattr(args, "allow_degraded", False)),
     )
     return cmd_verify(verify_args)
 
@@ -296,6 +342,7 @@ REASON_DESCRIPTIONS: Dict[str, str] = {
     "policy_error": "erreur lors de l'évaluation de la politique d'identité",
     "identity_ok": "l'identité du signataire correspond à celle attendue",
     "identity_mismatch": "l'identité du signataire NE correspond PAS à celle attendue",
+    "signer_identity_diverged": "l'identité demandée et l'identité du certificat ne correspondent pas : preuve refusée",
     "issuer_ok": "l'émetteur OIDC est autorisé",
     "issuer_not_allowed": "l'émetteur OIDC n'est PAS autorisé",
     "coherence_ok": "les horodatages Rekor et Bitcoin sont cohérents (<24h)",
@@ -384,6 +431,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     # gwylbundle.json / gwylproof.ots) have been materialized.
     lookup_dir_raw = getattr(args, "lookup_dir", None)
     lookup_dir: Optional[Path] = Path(str(lookup_dir_raw)) if lookup_dir_raw else None
+    allow_degraded = bool(getattr(args, "allow_degraded", False))
 
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     reasons: List[str] = []
@@ -600,12 +648,18 @@ def cmd_verify(args: argparse.Namespace) -> int:
         except Exception:
             reasons.append("policy_error")
 
-    if expect_identity and bundle_identity:
-        if bundle_identity.lower() == expect_identity.lower():
+    if expect_identity:
+        if bundle_identity and bundle_identity.lower() == expect_identity.lower():
             reasons.append("identity_ok")
         else:
             reasons.append("identity_mismatch")
-            policy_ok = False if strict else policy_ok
+            policy_ok = False
+
+    signer = proof.get("signer") or {}
+    if signer.get("matches_requested") is False:
+        reasons.append("signer_identity_diverged")
+        if not allow_degraded:
+            policy_ok = False
 
     if allow_issuer and bundle_issuer:
         if allow_issuer in bundle_issuer:
@@ -679,14 +733,25 @@ def cmd_verify(args: argparse.Namespace) -> int:
     _explain_reasons(reasons)
 
     if strict:
-        return 0 if (canonical_ok and (bundle_ok or ots_ok) and policy_ok and coherence_ok) else 1
-    return 0 if canonical_ok else 1
+        accepted = canonical_ok and (bundle_ok or ots_ok) and policy_ok and coherence_ok
+    else:
+        accepted = canonical_ok and policy_ok and coherence_ok
+    if not allow_degraded and "dsse_unsigned_envelope" in reasons:
+        accepted = False
+    return 0 if accepted else 1
 
 
 def cmd_ots_upgrade(args: argparse.Namespace) -> int:
     proof_file = Path(args.proof)
     ok = OTSManager.upgrade(proof_file)
     print("Upgraded" if ok else "No upgrade performed")
+    return 0
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    from .ui import serve
+
+    serve(port=int(getattr(args, "port", 8765)))
     return 0
 
 
@@ -731,6 +796,10 @@ def main() -> int:
     )
     doc.set_defaults(func=cmd_doctor)
 
+    ui = sub.add_parser("ui", help="Open the local verification interface (127.0.0.1 only)")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.set_defaults(func=cmd_ui)
+
     sg = sub.add_parser("sign", help="Create a portable proof embedded in the EML (ready to send)")
     sg.add_argument("eml")
     sg.add_argument("--identity", required=True)
@@ -752,6 +821,11 @@ def main() -> int:
     ck = sub.add_parser("check", help="Verify a received message against its embedded proof")
     ck.add_argument("eml")
     ck.add_argument("--strict", action="store_true")
+    ck.add_argument(
+        "--allow-degraded",
+        action="store_true",
+        help="Accept an unsigned envelope or a signer/certificate identity mismatch",
+    )
     ck.add_argument("--expect-identity", help="Expected signer identity (email)")
     ck.add_argument("--allow-issuer", help="Allowed OIDC issuer substring")
     ck.add_argument(
@@ -769,6 +843,11 @@ def main() -> int:
     vf.add_argument("--eml", required=True)
     vf.add_argument("--proof", required=True)
     vf.add_argument("--strict", action="store_true")
+    vf.add_argument(
+        "--allow-degraded",
+        action="store_true",
+        help="Accept an unsigned envelope or a signer/certificate identity mismatch",
+    )
     vf.add_argument("--policy", help="Path to identity policy YAML")
     vf.add_argument("--expect-identity", help="Expected signer identity (email)")
     vf.add_argument("--allow-issuer", help="Allowed OIDC issuer substring")

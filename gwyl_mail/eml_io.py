@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
 PROOF_HEADER = "X-GWyl-Proof"
 PROOF_VERSION = "v1"
@@ -39,9 +39,10 @@ PROOF_FILENAMES = {PROOF_JSON_FILENAME, OTS_FILENAME, BUNDLE_FILENAME}
 class ExtractedProof:
     """Proof artifacts extracted from a received message."""
 
-    envelope: Dict[str, Any]  # DSSE envelope (or plain proof dict)
+    envelope: Dict[str, Any]
     ots_bytes: Optional[bytes] = None
     bundle_bytes: Optional[bytes] = None
+    ambiguous: bool = False
 
 
 def _parse(eml_bytes: bytes) -> EmailMessage:
@@ -84,11 +85,13 @@ def inject_proof(
     return out if isinstance(out, bytes) else out.encode()
 
 
-def _find_part_by_filename(msg: EmailMessage, filename: str) -> Optional[Any]:
-    for part in msg.walk():
-        if part.get_filename() == filename:
-            return part
-    return None
+def _parts_named(msg: EmailMessage, filename: str) -> list[Any]:
+    return [part for part in msg.walk() if part.get_filename() == filename]
+
+
+def _payload_bytes(part: Any) -> Optional[bytes]:
+    raw = part.get_payload(decode=True)
+    return raw if isinstance(raw, bytes) else None
 
 
 def extract_proof(eml_bytes: bytes) -> Optional[ExtractedProof]:
@@ -97,34 +100,34 @@ def extract_proof(eml_bytes: bytes) -> Optional[ExtractedProof]:
     Detection is based on the gwylproof.json attachment itself: the
     X-GWyl-Proof marker header is advisory, because MTAs may strip unknown
     X- headers in transit.
+
+    More than one part with a proof filename is ambiguous (an attacker can
+    prepend a second gwylproof.json). Callers must refuse those messages.
     """
     msg = _parse(eml_bytes)
 
-    proof_part = _find_part_by_filename(msg, PROOF_JSON_FILENAME)
-    if proof_part is None:
+    proof_parts = _parts_named(msg, PROOF_JSON_FILENAME)
+    if not proof_parts:
         return None
-    payload = proof_part.get_payload(decode=True)
-    if not isinstance(payload, bytes):
+    if (
+        len(proof_parts) > 1
+        or len(_parts_named(msg, OTS_FILENAME)) > 1
+        or len(_parts_named(msg, BUNDLE_FILENAME)) > 1
+    ):
+        return ExtractedProof(envelope={}, ambiguous=True)
+
+    payload = _payload_bytes(proof_parts[0])
+    if payload is None:
         return None
     try:
         envelope = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return None
 
-    ots_bytes: Optional[bytes] = None
-    ots_part = _find_part_by_filename(msg, OTS_FILENAME)
-    if ots_part is not None:
-        raw = ots_part.get_payload(decode=True)
-        if isinstance(raw, bytes):
-            ots_bytes = raw
-
-    bundle_bytes: Optional[bytes] = None
-    bundle_part = _find_part_by_filename(msg, BUNDLE_FILENAME)
-    if bundle_part is not None:
-        raw = bundle_part.get_payload(decode=True)
-        if isinstance(raw, bytes):
-            bundle_bytes = raw
-
+    ots_parts = _parts_named(msg, OTS_FILENAME)
+    bundle_parts = _parts_named(msg, BUNDLE_FILENAME)
+    ots_bytes = _payload_bytes(ots_parts[0]) if ots_parts else None
+    bundle_bytes = _payload_bytes(bundle_parts[0]) if bundle_parts else None
     return ExtractedProof(envelope=envelope, ots_bytes=ots_bytes, bundle_bytes=bundle_bytes)
 
 
@@ -136,21 +139,34 @@ def strip_proof(eml_bytes: bytes) -> bytes:
     when the marker header was stripped by an MTA.
     """
     msg = _parse(eml_bytes)
-    has_marker = msg.get(PROOF_HEADER) is not None
-
     changed = False
-    if msg.is_multipart():
-        payload = msg.get_payload()
-        if isinstance(payload, list):
-            parts = cast(Any, payload)  # Message objects at runtime
-            kept = [part for part in parts if part.get_filename() not in PROOF_FILENAMES]
-            if len(kept) != len(parts):
-                msg.set_payload(kept)
-                changed = True
-    if has_marker:
+    if msg.get(PROOF_HEADER) is not None:
         del msg[PROOF_HEADER]
+        changed = True
+    if _strip_named_parts(msg):
         changed = True
     if not changed:
         return eml_bytes
     out = msg.as_bytes()
     return out if isinstance(out, bytes) else out.encode()
+
+
+def _strip_named_parts(part: Any) -> bool:
+    """Drop proof attachments at every MIME level, not only the top one."""
+    if not part.is_multipart():
+        return False
+    payload = part.get_payload()
+    if not isinstance(payload, list):
+        return False
+    changed = False
+    kept = []
+    for child in payload:
+        if child.get_filename() in PROOF_FILENAMES:
+            changed = True
+            continue
+        if _strip_named_parts(child):
+            changed = True
+        kept.append(child)
+    if len(kept) != len(payload):
+        part.set_payload(kept)
+    return changed

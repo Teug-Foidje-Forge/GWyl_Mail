@@ -270,3 +270,35 @@ def test_body_encoding_qp_vs_utf8():
     h2 = GWylCanonical.hash(msg_utf8)
 
     assert h1 == h2, "QP and UTF-8 encoded bodies should produce same hash"
+
+
+def test_html_alternative_changes_the_hash():
+    """A rewritten HTML part must not keep the plain-text hash."""
+
+    def build(html: str) -> EmailMessage:
+        msg = EmailMessage()
+        msg["From"] = "alice@example.com"
+        msg["To"] = "bob@example.com"
+        msg["Subject"] = "Both parts"
+        msg["Date"] = "Thu, 11 Jan 2025 14:30:22 +0000"
+        msg["Message-ID"] = "<html-test@example.com>"
+        msg.set_content("Hello Bob")
+        msg.add_alternative(html, subtype="html")
+        return msg
+
+    assert GWylCanonical.hash(build("<p>Hello Bob</p>")) != GWylCanonical.hash(
+        build("<p>Wired funds sent</p>")
+    )
+
+
+def test_single_part_hash_ignores_unrelated_headers():
+    msg = EmailMessage()
+    msg["From"] = "alice@example.com"
+    msg["To"] = "bob@example.com"
+    msg["Subject"] = "Only plain"
+    msg["Date"] = "Thu, 11 Jan 2025 14:30:22 +0000"
+    msg["Message-ID"] = "<plain-only@example.com>"
+    msg.set_content("Hello Bob")
+    plain = GWylCanonical.hash(msg)
+    msg["X-Unrelated"] = "noise"
+    assert GWylCanonical.hash(msg) == plain

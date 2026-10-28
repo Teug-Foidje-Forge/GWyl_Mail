@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>GWyl</title>
+<style>
+  body { font: 14px/1.4 Georgia, serif; width: 340px; margin: 12px; color: #1c1915; }
+  button { font: inherit; background: #1f6b4a; color: white; border: 0; border-radius: 999px; padding: 8px 14px; }
+  pre { white-space: pre-wrap; font: 12px/1.35 ui-monospace, monospace; background: #221e1a; color: #f3eadf; padding: 8px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<p>Vérifie le message ouvert. Nécessite <code>gwyl-mail ui</code>.</p>
+<p><label><input id="deg" type="checkbox"> Accepter une preuve dégradée</label></p>
+<button id="go" type="button">Vérifier ce message</button>
+<pre id="out"></pre>
+<script src="popup.js"></script>
+</body>
+</html>

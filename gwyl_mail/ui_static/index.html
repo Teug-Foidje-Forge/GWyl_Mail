@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GWyl Mail</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --paper: #f4efe6;
+    --card: #fffaf3;
+    --line: #d9cfc0;
+    --stamp: #1f6b4a;
+    --stamp-dim: #e5f2eb;
+    --warn: #8a4b08;
+    --bad: #8d2b2b;
+    --bad-bg: #f8e8e4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 16px/1.45 "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  header, main { max-width: 820px; margin: 0 auto; padding: 28px 20px; }
+  header { padding-bottom: 0; }
+  h1 { font-weight: 600; letter-spacing: -0.03em; margin: 0 0 6px; font-size: 2rem; }
+  .lede { margin: 0; color: #4a433a; }
+  nav { display: flex; gap: 8px; margin: 22px 0; }
+  button, .file {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  button.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  button.primary { background: var(--stamp); color: white; border-color: var(--stamp); }
+  section { display: none; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  section.on { display: block; }
+  label { display: block; margin: 12px 0 4px; font-size: 0.92rem; }
+  input[type="email"], select {
+    width: 100%;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: white;
+  }
+  .drop {
+    border: 1.5px dashed var(--line);
+    border-radius: 12px;
+    padding: 28px 16px;
+    text-align: center;
+    background: #fbf7f1;
+  }
+  .drop.over { border-color: var(--stamp); background: var(--stamp-dim); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .check { font-size: 0.92rem; }
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: #221e1a;
+    color: #f3eadf;
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 10px; margin: 0 6px 6px 0; font-size: 0.85rem; }
+  .ok { background: var(--stamp-dim); color: var(--stamp); }
+  .bad { background: var(--bad-bg); color: var(--bad); }
+  .warn { background: #f8ecd9; color: var(--warn); }
+  footer { max-width: 820px; margin: 0 auto; padding: 8px 20px 32px; color: #6d6458; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GWyl Mail</h1>
+  <p class="lede">Vérifier un message reçu, ou y joindre une preuve avant envoi. Le contrôle se fait sur cette machine.</p>
+  <nav>
+    <button type="button" id="tab-check" class="active">Vérifier</button>
+    <button type="button" id="tab-sign">Préparer</button>
+    <button type="button" id="tab-doctor">Environnement</button>
+  </nav>
+</header>
+<main>
+  <section id="panel-check" class="on">
+    <div class="drop" id="drop-check">Déposer un fichier .eml ici, ou <label class="file">choisir<input id="file-check" type="file" accept=".eml,message/rfc822" hidden></label></div>
+    <div class="row">
+      <label class="check"><input id="deg-check" type="checkbox"> Accepter une preuve dégradée (non signée)</label>
+      <button type="button" class="primary" id="run-check">Vérifier</button>
+    </div>
+    <div id="out-check"></div>
+  </section>
+  <section id="panel-sign">
+    <div class="drop" id="drop-sign">Déposer le brouillon .eml, ou <label class="file">choisir<input id="file-sign" type="file" accept=".eml,message/rfc822" hidden></label></div>
+    <label for="identity">Identité du signataire</label>
+    <input id="identity" type="email" placeholder="prenom@exemple.fr" autocomplete="off">
+    <label for="profile">Profil de canonicalisation</label>
+    <select id="profile"><option value="strict">Strict</option><option value="relaxed">Relaxed (tolère les en-têtes des serveurs)</option></select>
+    <div class="row">
+      <label class="check"><input id="deg-sign" type="checkbox"> Autoriser une preuve dégradée si cosign ou ots manque</label>
+      <button type="button" class="primary" id="run-sign">Préparer le message</button>
+    </div>
+    <div id="out-sign"></div>
+  </section>
+  <section id="panel-doctor">
+    <p>cosign, ots et les paquets Python requis. Le réseau n’est pas testé depuis cette page.</p>
+    <button type="button" class="primary" id="run-doctor">Contrôler</button>
+    <div id="out-doctor"></div>
+  </section>
+</main>
+<footer>Interface locale. Aucun message n’est envoyé à un serveur distant par cette page.</footer>
+<script>
+const CLIENT = {"X-GWyl-Client": "1"};
+const files = {check: null, sign: null};
+
+function tab(name) {
+  for (const id of ["check", "sign", "doctor"]) {
+    document.getElementById("panel-" + id).classList.toggle("on", id === name);
+    document.getElementById("tab-" + id).classList.toggle("active", id === name);
+  }
+}
+document.getElementById("tab-check").onclick = () => tab("check");
+document.getElementById("tab-sign").onclick = () => tab("sign");
+document.getElementById("tab-doctor").onclick = () => tab("doctor");
+
+function bindDrop(zoneId, inputId, key) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  input.onchange = () => { files[key] = input.files[0] || null; zone.firstChild.textContent = files[key] ? files[key].name + " — " : "Déposer un fichier .eml ici, ou "; };
+  zone.ondragover = (e) => { e.preventDefault(); zone.classList.add("over"); };
+  zone.ondragleave = () => zone.classList.remove("over");
+  zone.ondrop = (e) => {
+    e.preventDefault();
+    zone.classList.remove("over");
+    files[key] = e.dataTransfer.files[0] || null;
+    if (files[key]) zone.insertBefore(document.createTextNode(files[key].name + " — "), zone.firstChild);
+  };
+}
+bindDrop("drop-check", "file-check", "check");
+bindDrop("drop-sign", "file-sign", "sign");
+
+function pills(data) {
+  if (!data || data.error) return "";
+  const bits = [
+    ["Contenu", data.canonical],
+    ["Preuve signée", data.dsse_signed],
+    ["Sigstore", data.sigstore_bundle],
+    ["Bitcoin", data.ots]
+  ];
+  return bits.map(([name, ok]) => `<span class="pill ${ok ? "ok" : "bad"}">${name}: ${ok ? "oui" : "non"}</span>`).join("");
+}
+
+document.getElementById("run-check").onclick = async () => {
+  const out = document.getElementById("out-check");
+  if (!files.check) { out.innerHTML = `<p class="pill bad">Choisissez un .eml</p>`; return; }
+  const body = new FormData();
+  body.append("eml", files.check, "message.eml");
+  if (document.getElementById("deg-check").checked) body.append("allow_degraded", "1");
+  out.innerHTML = "<p>Vérification…</p>";
+  const res = await fetch("/api/check", {method: "POST", headers: CLIENT, body});
+  const data = await res.json();
+  const klass = res.ok ? "ok" : "bad";
+  out.innerHTML = `<p><span class="pill ${klass}">${res.ok ? "Accepté" : "Refusé"}</span></p>${pills(data)}<pre>${JSON.stringify(data, null, 2)}</pre>`;
+};
+
+document.getElementById("run-sign").onclick = async () => {
+  const out = document.getElementById("out-sign");
+  if (!files.sign) { out.innerHTML = `<p class="pill bad">Choisissez un .eml</p>`; return; }
+  const identity = document.getElementById("identity").value.trim();
+  if (!identity.includes("@")) { out.innerHTML = `<p class="pill bad">Identité invalide</p>`; return; }
+  const body = new FormData();
+  body.append("eml", files.sign, "message.eml");
+  body.append("identity", identity);
+  body.append("profile", document.getElementById("profile").value);
+  if (document.getElementById("deg-sign").checked) body.append("allow_degraded", "1");
+  out.innerHTML = "<p>Préparation…</p>";
+  const res = await fetch("/api/sign", {method: "POST", headers: CLIENT, body});
+  if (!res.ok) {
+    const data = await res.json();
+    out.innerHTML = `<p class="pill bad">Refusé</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  out.innerHTML = `<p class="pill ok">Message prêt</p><p><a id="dl" download="message-signe.eml">Télécharger le .eml à envoyer</a></p>`;
+  document.getElementById("dl").href = url;
+};
+
+document.getElementById("run-doctor").onclick = async () => {
+  const out = document.getElementById("out-doctor");
+  const res = await fetch("/api/doctor");
+  const data = await res.json();
+  out.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+};
+</script>
+</body>
+</html>

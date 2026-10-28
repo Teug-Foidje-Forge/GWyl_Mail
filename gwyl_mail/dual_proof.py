@@ -20,6 +20,10 @@ from .sigstore_timestamp import sign_and_timestamp
 from .validation import ProofValidationError, ProofValidator
 
 
+class SignerIdentityError(RuntimeError):
+    """Requested signer and the cosign certificate identity disagree."""
+
+
 @dataclass
 class ProofArtifacts:
     """Local files backing a proof (SPRINT 9: used to embed into emails)."""
@@ -48,6 +52,7 @@ def create_proof(
     profile: str = "strict",
     portable: bool = False,
     return_artifacts: bool = False,
+    allow_identity_mismatch: bool = False,
 ) -> Any:
     """Create cryptographic proof for email message (Sprint 6.2.1: profile support).
 
@@ -115,6 +120,10 @@ def create_proof(
             f"'{sigstore.cert_identity}' (the OIDC session identity is the effective signer).",
             file=sys.stderr,
         )
+        if not allow_identity_mismatch:
+            raise SignerIdentityError(
+                f"requested '{identity}' but certificate identity is '{sigstore.cert_identity}'"
+            )
     signer_data: Optional[Dict[str, Any]] = None
     if sigstore.cert_identity or sigstore.cert_issuer:
         signer_data = {
@@ -128,7 +137,7 @@ def create_proof(
         "version": "0.2.0",
         "message_id": _sha256_hex((identity + ts + content_hash).encode())[:36],
         "canonical": {
-            "algorithm": "gwyl-canonical-v0.2",
+            "algorithm": "gwyl-canonical-v0.3",
             "profile": profile,  # SPRINT 6.2.1: Store profile used
             "nfc_scope": "filenames_only",
             "content_hash": content_hash,

@@ -136,11 +136,16 @@ def test_verify_reports_unsigned_envelope_as_not_signed(tmp_path, capsys):
     proof_path.write_text(json.dumps(proof))
 
     rc = cli.cmd_verify(_verify_args(tmp_path, proof_path))
-    assert rc == 0  # canonical ok, non-strict
+    assert rc == 1  # unsigned envelope is refused unless --allow-degraded
     out = json.loads(capsys.readouterr().out)
     assert out["dsse_signed"] is False
     assert "dsse_unsigned_envelope" in out["reasons"]
     assert "canonical_ok" in out["reasons"][1]
+
+    args = _verify_args(tmp_path, proof_path)
+    args.allow_degraded = True
+    rc = cli.cmd_verify(args)
+    assert rc == 0
 
 
 def test_verify_reports_signed_envelope_as_signed(monkeypatch, tmp_path, capsys):

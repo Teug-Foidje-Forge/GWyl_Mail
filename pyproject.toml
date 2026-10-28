@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gwyl-mail"
-version = "0.3.0"
+version = "0.3.1"
 description = "Privacy Infrastructure Layer pour Email - Intégrité cryptographique et timestamping"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -56,10 +56,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Kenchan1111/GWyl_Mail"
-Documentation = "https://github.com/Kenchan1111/GWyl_Mail/tree/main/docs"
-Repository = "https://github.com/Kenchan1111/GWyl_Mail"
-Issues = "https://github.com/Kenchan1111/GWyl_Mail/issues"
+Homepage = "https://github.com/Teug-Foidje-Forge/GWyl_Mail"
+Documentation = "https://github.com/Teug-Foidje-Forge/GWyl_Mail/tree/main/docs"
+Repository = "https://github.com/Teug-Foidje-Forge/GWyl_Mail"
+Issues = "https://github.com/Teug-Foidje-Forge/GWyl_Mail/issues"
 
 [project.scripts]
 gwyl-mail = "gwyl_mail.cli:main"
@@ -68,7 +68,7 @@ gwyl-mail = "gwyl_mail.cli:main"
 packages = ["gwyl_mail"]
 
 [tool.setuptools.package-data]
-gwyl_mail = ["schemas/*.json", "*.yml"]
+gwyl_mail = ["schemas/*.json", "*.yml", "ui_static/*"]
 
 [tool.black]
 line-length = 100

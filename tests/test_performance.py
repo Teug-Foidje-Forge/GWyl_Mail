@@ -63,6 +63,7 @@ def test_verify_offline_under_kpi(monkeypatch, tmp_path: Path):
         allow_issuer=None,
         profile_override=None,
         lookup_dir=str(inbox),
+        allow_degraded=True,
     )
     cli.cmd_verify(args)  # warmup
     t0 = time.perf_counter()

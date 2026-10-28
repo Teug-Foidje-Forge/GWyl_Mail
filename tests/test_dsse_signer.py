@@ -58,22 +58,21 @@ def test_extract_proof_from_invalid_envelope():
 
 
 def test_verify_unsigned_envelope():
-    """Test that unsigned envelopes (backward compat) verify successfully."""
+    """Unsigned envelopes are extracted but not treated as verified."""
     proof = {"version": "0.2.0", "test": "data"}
 
-    # Create unsigned envelope manually
     proof_json = json.dumps(proof, sort_keys=True, separators=(",", ":"))
     envelope = {
         "payload": base64.b64encode(proof_json.encode()).decode(),
         "payloadType": "application/json",
-        "signatures": [],  # Empty = unsigned
+        "signatures": [],
     }
 
     verified, extracted_proof, error = verify_proof_dsse(envelope)
 
-    assert verified is True
+    assert verified is False
+    assert error == "unsigned_envelope"
     assert extracted_proof == proof
-    assert error is None
 
 
 def test_verify_envelope_without_cosign():
@@ -90,7 +89,8 @@ def test_verify_envelope_without_cosign():
 
     verified, extracted_proof, error = verify_proof_dsse(envelope)
 
-    assert verified is True
+    assert verified is False
+    assert error == "unsigned_envelope"
     assert extracted_proof == proof
 
 

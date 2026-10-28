@@ -11,6 +11,7 @@ help:
 	@echo "  test        Run tests with coverage"
 	@echo "  test-poc    Run the PoC validation suite (tests + benchmarks when present)"
 	@echo "  doctor      Check environment (cosign, ots, python packages, network)"
+	@echo "  ui          Local interface on 127.0.0.1:8765"
 	@echo "  lint        Run linters (ruff, black, mypy)"
 	@echo "  format      Format code (black)"
 	@echo "  clean       Clean build artifacts"
@@ -41,6 +42,9 @@ test-poc:
 
 doctor:
 	python -m gwyl_mail.cli doctor
+
+ui:
+	python -m gwyl_mail.cli ui
 
 lint:
 	ruff check gwyl_mail tests

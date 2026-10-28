@@ -1,8 +1,8 @@
 # GWyl Mail - État du Projet
 
-**Date**: 2026-09-17
-**Version**: 0.3.0 (Sprint 10 complété — prêt pour le pilote)
-**Status**: KPIs mesurés (interop 100% Postfix réel, verify 4,5 ms, overhead 4,4 Ko), 137/137 tests, coverage 69%
+**Date**: 2026-10-28
+**Version**: 0.3.1
+**Status**: noyau 0.3.0 durci — HTML couvert, preuves non signées refusées par défaut, interface locale et extensions. Pilote pas encore tagué.
 
 ---
 
