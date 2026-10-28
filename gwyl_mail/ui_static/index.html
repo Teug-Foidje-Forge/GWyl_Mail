@@ -148,11 +148,13 @@ function pills(data) {
   if (!data || data.error) return "";
   const bits = [
     ["Contenu", data.canonical],
+    ["Texte brut", data.plain],
     ["Preuve signée", data.dsse_signed],
     ["Sigstore", data.sigstore_bundle],
     ["Bitcoin", data.ots]
-  ];
-  return bits.map(([name, ok]) => `<span class="pill ${ok ? "ok" : "bad"}">${name}: ${ok ? "oui" : "non"}</span>`).join("");
+  ].filter(([, value]) => value !== null && value !== undefined);
+  const note = data.html_differs ? `<p class="pill warn">Le texte brut correspond. Le HTML non. Refusé.</p>` : "";
+  return note + bits.map(([name, ok]) => `<span class="pill ${ok ? "ok" : "bad"}">${name}: ${ok ? "oui" : "non"}</span>`).join("");
 }
 
 document.getElementById("run-check").onclick = async () => {

@@ -291,6 +291,36 @@ def test_html_alternative_changes_the_hash():
     )
 
 
+def test_plain_diagnostic_ignores_html_and_tracks_plain_text():
+    def build(plain: str, html: str) -> EmailMessage:
+        msg = EmailMessage()
+        msg["From"] = "alice@example.com"
+        msg["To"] = "bob@example.com"
+        msg["Subject"] = "Both parts"
+        msg["Date"] = "Thu, 11 Jan 2025 14:30:22 +0000"
+        msg["Message-ID"] = "<diag@example.com>"
+        msg.set_content(plain)
+        msg.add_alternative(html, subtype="html")
+        return msg
+
+    original = build("Amount: 10", "<p>Amount: 10</p>")
+    html_only = build("Amount: 10", "<p>Amount: 9999</p>")
+    plain_changed = build("Amount: 9999", "<p>Amount: 10</p>")
+
+    assert GWylCanonical.hash(original) != GWylCanonical.hash(html_only)
+    assert GWylCanonical.plain_hash(original) == GWylCanonical.plain_hash(html_only)
+    assert GWylCanonical.plain_hash(original) != GWylCanonical.plain_hash(plain_changed)
+
+    plain_only = EmailMessage()
+    plain_only["From"] = "alice@example.com"
+    plain_only["To"] = "bob@example.com"
+    plain_only["Subject"] = "Only plain"
+    plain_only["Date"] = "Thu, 11 Jan 2025 14:30:22 +0000"
+    plain_only["Message-ID"] = "<plain-diag@example.com>"
+    plain_only.set_content("Hello")
+    assert GWylCanonical.hash(plain_only) == GWylCanonical.plain_hash(plain_only)
+
+
 def test_single_part_hash_ignores_unrelated_headers():
     msg = EmailMessage()
     msg["From"] = "alice@example.com"

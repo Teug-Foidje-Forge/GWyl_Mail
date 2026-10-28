@@ -266,6 +266,42 @@ def canonicalize_attachments(msg: EmailMessage) -> List[bytes]:
     return [f"attachment:sha256:{h}".encode() for h in hashes]
 
 
+def canonicalize_plain_body(msg: EmailMessage) -> bytes:
+    """Body used by the diagnostic hash: text/plain only, never HTML.
+
+    A message with one plain part uses the same bytes as the deciding hash
+    would for that part alone. HTML is omitted, so a rewritten HTML
+    alternative does not move this hash. Absence of a plain part yields an
+    empty body, not the HTML.
+    """
+    parts = [part for part in _visible_text_parts(msg) if part.get_content_type() == "text/plain"]
+    if len(parts) == 1:
+        content = parts[0].get_content()
+        return _normalize_text(content) if isinstance(content, str) else b""
+    chunks: List[bytes] = []
+    for part in parts:
+        content = part.get_content()
+        if not isinstance(content, str):
+            continue
+        chunks.append(b"part:text/plain\n")
+        chunks.append(_normalize_text(content))
+    return b"".join(chunks)
+
+
+def canonicalize_plain(msg: EmailMessage, profile: str = "strict") -> bytes:
+    """Diagnostic form: same headers and attachments, plain text only."""
+    headers = canonicalize_headers(msg, profile)
+    body = canonicalize_plain_body(msg)
+    atts = canonicalize_attachments(msg)
+    parts: List[bytes] = [headers, b"\n", body]
+    parts.extend([a + b"\n" for a in atts])
+    return b"".join(parts)
+
+
+def compute_plain_hash(msg: EmailMessage, profile: str = "strict") -> str:
+    return hashlib.sha256(canonicalize_plain(msg, profile)).hexdigest()
+
+
 def canonicalize(msg: EmailMessage, profile: str = "strict") -> bytes:
     """Canonicalize email message with profile support (Sprint 6.2.1).
 
@@ -323,3 +359,18 @@ class GWylCanonical:
         else:
             m = Parser(policy=policy.default).parsestr(message)
         return compute_hash(m, profile)
+
+    @staticmethod
+    def plain_hash(message: EmailMessage | bytes | str, profile: str = "strict") -> str:
+        """Diagnostic hash of headers, text/plain and attachments. Ignores HTML.
+
+        Never decides acceptance. A match only means the plain text and the
+        attachments still correspond to what was signed.
+        """
+        if isinstance(message, EmailMessage):
+            return compute_plain_hash(message, profile)
+        if isinstance(message, bytes):
+            parsed = BytesParser(policy=policy.default).parsebytes(message)
+        else:
+            parsed = Parser(policy=policy.default).parsestr(message)
+        return compute_plain_hash(parsed, profile)

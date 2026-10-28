@@ -31,6 +31,20 @@
         "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
+    "diagnostic": {
+      "type": "object",
+      "properties": {
+        "plain": {
+          "type": "object",
+          "required": ["algorithm", "content_hash", "decides"],
+          "properties": {
+            "algorithm": {"type": "string", "const": "gwyl-plain-v0.3"},
+            "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "decides": {"type": "boolean", "const": false}
+          }
+        }
+      }
+    },
     "policy": {
       "oneOf": [
         {

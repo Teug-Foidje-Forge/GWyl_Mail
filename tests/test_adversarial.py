@@ -68,7 +68,9 @@ def test_prepended_second_proof_is_refused(tmp_path: Path, monkeypatch: pytest.M
     assert rc == 1
 
 
-def test_html_swap_after_sign_fails_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_html_swap_after_sign_fails_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "_has", lambda _name: False)
     msg = EmailMessage()
@@ -94,6 +96,7 @@ def test_html_swap_after_sign_fails_check(tmp_path: Path, monkeypatch: pytest.Mo
         )
         == 0
     )
+    capsys.readouterr()
     raw = (tmp_path / "signed.eml").read_bytes()
     tampered = raw.replace(b"Amount: 10</p>", b"Amount: 9999</p>")
     assert tampered != raw
@@ -109,6 +112,11 @@ def test_html_swap_after_sign_fails_check(tmp_path: Path, monkeypatch: pytest.Mo
         )
     )
     assert rc == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["canonical"] is False
+    assert report["plain"] is True
+    assert report["html_differs"] is True
+    assert "html_differs" in report["reasons"]
 
 
 def test_identity_mismatch_refused(monkeypatch: pytest.MonkeyPatch) -> None:

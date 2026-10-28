@@ -74,6 +74,7 @@ def create_proof(
         a (proof, ProofArtifacts) tuple.
     """
     content_hash = GWylCanonical.hash(message, profile=profile)
+    plain_hash = GWylCanonical.plain_hash(message, profile=profile)
     ts = _utcnow_iso()
 
     # SPRINT 5.3.2: Extract EML From header for privacy metadata
@@ -141,6 +142,13 @@ def create_proof(
             "profile": profile,  # SPRINT 6.2.1: Store profile used
             "nfc_scope": "filenames_only",
             "content_hash": content_hash,
+        },
+        "diagnostic": {
+            "plain": {
+                "algorithm": "gwyl-plain-v0.3",
+                "content_hash": plain_hash,
+                "decides": False,
+            }
         },
         "signer": signer_data,
         "policy": policy_data,

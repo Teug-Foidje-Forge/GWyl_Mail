@@ -327,6 +327,9 @@ def _has(cmd: str) -> bool:
 REASON_DESCRIPTIONS: Dict[str, str] = {
     "canonical_ok": "le contenu du message correspond exactement au hash de la preuve",
     "canonical_mismatch": "le contenu du message DIFFÈRE du hash de la preuve (message modifié ou profil de canonicalisation inadapté)",
+    "plain_ok": "le texte brut et les pièces jointes correspondent à la seconde empreinte ; elle ne décide pas",
+    "plain_mismatch": "le texte brut ou une pièce jointe diffère de la seconde empreinte",
+    "html_differs": "le texte brut correspond encore ; c'est le HTML qui a changé. Le message reste refusé",
     "canonical_error": "impossible de lire ou canoniser le message EML",
     "profile_missing_assumed_strict": "la preuve n'indique pas son profil, 'strict' supposé (preuve ancienne)",
     "profile_override": "profil de vérification forcé manuellement via --profile-override",
@@ -517,8 +520,21 @@ def cmd_verify(args: argparse.Namespace) -> int:
             reasons.append(f"canonical_ok(profile={effective_profile})")
         else:
             reasons.append(f"canonical_mismatch(profile={effective_profile})")
+        plain_section = (proof.get("diagnostic") or {}).get("plain") or {}
+        plain_expected = plain_section.get("content_hash")
+        if isinstance(plain_expected, str) and len(plain_expected) == 64:
+            plain_ok = GWylCanonical.plain_hash(msg, profile=effective_profile) == plain_expected
+            reasons.append("plain_ok" if plain_ok else "plain_mismatch")
+            html_differs = (not canonical_ok) and plain_ok
+            if html_differs:
+                reasons.append("html_differs")
+        else:
+            plain_ok = None
+            html_differs = False
     except Exception:
         canonical_ok = False
+        plain_ok = None
+        html_differs = False
         reasons.append("canonical_error")
 
     # 2) Sigstore bundle
@@ -711,6 +727,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     summary = {
         "canonical": canonical_ok,
+        "plain": plain_ok,
+        "html_differs": html_differs,
         "sigstore_bundle": bundle_ok,
         "ots": ots_ok,
         "dsse_signed": dsse_signed,

@@ -45,6 +45,7 @@ Les preuves déjà émises peuvent contenir `legal_grade` et `trust_level`. Le v
 4. Le profil de notarisation est strict. `--allow-degraded`, `--no-dsse` et `identity_policy.mode: warn` sont des outils de laboratoire. Une commande de notarisation les refuse.
 5. La preuve couvre le message sans ses propres pièces jointes. Deux pièces de même nom de preuve rendent le message ambigu : `check` refuse.
 6. L'interface et l'API n'écoutent que `127.0.0.1`.
+7. `diagnostic.plain` (`gwyl-plain-v0.3`) couvre les mêmes en-têtes et pièces, sans le HTML. `decides` vaut `false`. Si le HTML seul a changé, `check` refuse et dit `html_differs`. Le chemin SMTP ne choisit pas cette règle.
 
 ## 4. État au 0.3.1
 
