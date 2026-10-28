@@ -25,6 +25,7 @@ from .eml_io import (
     inject_proof,
     strip_proof,
 )
+from .itsme import ItsmeNotConnected, UnavailableApp, evaluate_traveling
 from .ots_manager import OTSManager
 from .proof_route import store_package
 
@@ -259,6 +260,20 @@ def cmd_sign(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_notarize(args: argparse.Namespace) -> int:
+    """Ask itsme. Stop, without a proof, until the phone application exists.
+
+    There is no flag that can answer yes or no in the sender's place.
+    """
+    del args
+    try:
+        UnavailableApp().sign("0" * 64)
+    except ItsmeNotConnected:
+        print("itsme n'est pas branché. Aucune preuve émise.", file=sys.stderr)
+        return 2
+    return 2
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     """SPRINT 9: verify a received message against its embedded proof.
 
@@ -269,6 +284,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     """
     eml_path = Path(args.eml)
     data = eml_path.read_bytes()
+    itsme_result = evaluate_traveling(data)
+    if itsme_result is not None:
+        code, summary = itsme_result
+        print(json.dumps(summary, indent=2))
+        return code
     extracted = extract_proof(data)
     if extracted is None:
         print(
@@ -362,6 +382,7 @@ REASON_DESCRIPTIONS: Dict[str, str] = {
     "html_differs": "le texte brut correspond encore ; c'est le HTML qui a changé. Le message reste refusé",
     "proof_recovered_locally": "les pièces de preuve ont été retirées ; la copie locale adressée par le hash a été utilisée",
     "injected_ref_ignored": "un en-tête de référence ne correspond pas à la preuve jointe ; l'en-tête a été ignoré",
+    "itsme_signature_unverified": "la réponse itsme est liée à ce hash, mais le certificat itsme n'est pas encore vérifié : ce n'est pas une signature qualifiée",
     "canonical_error": "impossible de lire ou canoniser le message EML",
     "profile_missing_assumed_strict": "la preuve n'indique pas son profil, 'strict' supposé (preuve ancienne)",
     "profile_override": "profil de vérification forcé manuellement via --profile-override",
@@ -870,6 +891,11 @@ def main() -> int:
         help="Canonicalization profile ('relaxed' tolerates MTA mutations in transit)",
     )
     sg.set_defaults(func=cmd_sign)
+
+    nz = sub.add_parser("notarize", help="Attest the sender with itsme, and sign only on a yes")
+    nz.add_argument("eml")
+    nz.add_argument("--out", "-o", required=True, help="Output EML path")
+    nz.set_defaults(func=cmd_notarize)
 
     ck = sub.add_parser("check", help="Verify a received message against its embedded proof")
     ck.add_argument("eml")
