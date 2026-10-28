@@ -6,17 +6,18 @@ Version: 0.3.1
 License: GPL-3.0-only
 Status: Alpha — noyau mesuré, interface locale, pas encore un client mail
 
+Le document de développement est [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Il prime sur les textes de la phase 0.
+
 ---
 
 ## 🎯 Vue d'ensemble
 
 GWyl Mail est une couche de confidentialité et d'intégrité qui s'ajoute au système de courrier électronique classique. Elle fournit:
 
-- ✅ **Intégrité cryptographique**: Détection de toute modification du message
-- ✅ **Non-répudiation**: Preuves horodatées blockchain (OpenTimestamps)
-- ✅ **Identité vérifiée**: Authentification OIDC via Sigstore
-- ✅ **Privacy by design**: Divulgation minimale des métadonnées
-- ✅ **Interopérabilité**: Overlay compatible SMTP/IMAP existant
+- **Intégrité** : hash canonique versionné du message
+- **Identité** : certificat OIDC Sigstore, niveau annoncé, pas un certificat qualifié
+- **Temps** : OpenTimestamps corroboré dans Bitcoin, sans présomption d'horodatage qualifié
+- **Transport** : la preuve voyage dans le message, sur le courrier existant
 
 ---
 
