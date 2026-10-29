@@ -81,11 +81,10 @@
 <body>
 <header>
   <h1>GWyl Mail</h1>
-  <p class="lede">Écrire un message et l'envoyer, ou vérifier un message reçu. Le contrôle se fait sur cette machine.</p>
+  <p class="lede">Vérifier un message reçu, ou y joindre une preuve avant envoi. Le contrôle se fait sur cette machine.</p>
   <nav>
     <button type="button" id="tab-check" class="active">Vérifier</button>
     <button type="button" id="tab-sign">Préparer</button>
-    <button type="button" id="tab-write">Écrire</button>
     <button type="button" id="tab-doctor">Environnement</button>
   </nav>
 </header>
@@ -110,26 +109,6 @@
     </div>
     <div id="out-sign"></div>
   </section>
-  <section id="panel-write">
-    <p>Pour une boîte Gmail ou Outlook. Le message est terminé ici, puis confié au serveur de la boîte.</p>
-    <label for="smtp-host">Serveur d'envoi</label>
-    <input id="smtp-host" type="text" placeholder="smtp.gmail.com ou smtp.office365.com" autocomplete="off">
-    <label for="smtp-user">Adresse</label>
-    <input id="smtp-user" type="email" placeholder="prenom@exemple.fr" autocomplete="off">
-    <label for="smtp-password">Mot de passe d'application</label>
-    <input id="smtp-password" type="password" autocomplete="new-password">
-    <label for="mail-to">Destinataire</label>
-    <input id="mail-to" type="email" autocomplete="off">
-    <label for="mail-subject">Sujet</label>
-    <input id="mail-subject" type="text" autocomplete="off">
-    <label for="mail-body">Message</label>
-    <textarea id="mail-body"></textarea>
-    <div class="row">
-      <label class="check"><input id="deg-write" type="checkbox"> Autoriser une preuve dégradée si cosign ou ots manque</label>
-      <button type="button" class="primary" id="run-write">Envoyer</button>
-    </div>
-    <div id="out-write"></div>
-  </section>
   <section id="panel-doctor">
     <p>cosign, ots et les paquets Python requis. Le réseau n’est pas testé depuis cette page.</p>
     <button type="button" class="primary" id="run-doctor">Contrôler</button>
@@ -142,14 +121,13 @@ const CLIENT = {"X-GWyl-Client": "1"};
 const files = {check: null, sign: null};
 
 function tab(name) {
-  for (const id of ["check", "sign", "write", "doctor"]) {
+  for (const id of ["check", "sign", "doctor"]) {
     document.getElementById("panel-" + id).classList.toggle("on", id === name);
     document.getElementById("tab-" + id).classList.toggle("active", id === name);
   }
 }
 document.getElementById("tab-check").onclick = () => tab("check");
 document.getElementById("tab-sign").onclick = () => tab("sign");
-document.getElementById("tab-write").onclick = () => tab("write");
 document.getElementById("tab-doctor").onclick = () => tab("doctor");
 
 function bindDrop(zoneId, inputId, key) {
@@ -215,34 +193,6 @@ document.getElementById("run-sign").onclick = async () => {
   const url = URL.createObjectURL(blob);
   out.innerHTML = `<p class="pill ok">Message prêt</p><p><a id="dl" download="message-signe.eml">Télécharger le .eml à envoyer</a></p>`;
   document.getElementById("dl").href = url;
-};
-
-document.getElementById("run-write").onclick = async () => {
-  const out = document.getElementById("out-write");
-  const account = {
-    host: document.getElementById("smtp-host").value.trim(),
-    port: 587,
-    username: document.getElementById("smtp-user").value.trim(),
-    from: document.getElementById("smtp-user").value.trim(),
-    password: document.getElementById("smtp-password").value
-  };
-  out.innerHTML = "<p>Envoi…</p>";
-  const saved = await fetch("/api/account", {method: "POST", headers: {...CLIENT, "Content-Type": "application/json"}, body: JSON.stringify(account)});
-  if (!saved.ok) {
-    out.innerHTML = `<p class="pill bad">Compte refusé</p>`;
-    return;
-  }
-  const res = await fetch("/api/send", {method: "POST", headers: {...CLIENT, "Content-Type": "application/json"}, body: JSON.stringify({
-    from: account.from,
-    to: document.getElementById("mail-to").value.trim(),
-    subject: document.getElementById("mail-subject").value.trim(),
-    body: document.getElementById("mail-body").value,
-    allow_degraded: document.getElementById("deg-write").checked
-  })});
-  const data = await res.json();
-  out.innerHTML = res.ok
-    ? `<p class="pill ok">Envoyé</p>`
-    : `<p class="pill bad">Refusé</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
 };
 
 document.getElementById("run-doctor").onclick = async () => {

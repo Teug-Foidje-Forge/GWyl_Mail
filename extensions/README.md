@@ -11,6 +11,6 @@ Puis ouvrir http://127.0.0.1:8765/
 | Dossier | Où l'installer |
 |---|---|
 | `extensions/browser` | Chrome ou Firefox, « Charger l'extension non empaquetée » |
-| `extensions/thunderbird` | Thunderbird 115+. Au clic sur Envoyer, le message est figé et expédié par l'application locale. |
+| `extensions/thunderbird` | Thunderbird 115+. Vérifie le message affiché. N'envoie rien. |
 
 Une preuve non signée est refusée, sauf si la case « preuve dégradée » est cochée. Deux pièces jointes `gwylproof.json` dans le même message sont refusées.

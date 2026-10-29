@@ -1,10 +1,7 @@
-# Deux portes, un seul envoi
+# Clients
 
-Thunderbird laisse un greffon voir le message avant l'envoi. Gmail et Outlook non : ils fabriquent le message après le clic.
+GWyl Mail n'est pas un client mail. Il ne se connecte pas à une boîte et il ne remplace pas l'éditeur.
 
-| Où la personne écrit | Ce qui part |
-|---|---|
-| Thunderbird, greffon activé | Le greffon donne le texte à l'application locale. C'est elle qui fige le message, joint la preuve et l'envoie. Thunderbird n'envoie pas une deuxième copie. |
-| Gmail ou Outlook | Pas de greffon. La personne écrit dans l'application locale. Le serveur de sa boîte ne fait que transporter le message déjà terminé. |
+Thunderbird peut s'en servir, parce qu'un greffon voit le message que Thunderbird va envoyer. Le formatage et le compte restent ceux de Thunderbird.
 
-Le mot de passe du compte reste dans `.gwyl_mail/account.json` sur cette machine. Il n'entre pas dans le message. itsme reste une option, désactivée par défaut.
+Gmail et Outlook ne le peuvent pas. Ils fabriquent le message après le clic sur Envoyer, et on ne construit pas un autre client pour contourner ça.
