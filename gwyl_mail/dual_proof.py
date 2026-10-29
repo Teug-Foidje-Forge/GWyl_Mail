@@ -16,6 +16,7 @@ from .dsse_signer import sign_proof_dsse
 from .eml_io import BUNDLE_FILENAME, OTS_FILENAME
 from .ots_manager import OTSManager
 from .policy_utils import compute_policy_hash, extract_policy_metadata
+from .signed_content import snapshot
 from .sigstore_timestamp import sign_and_timestamp
 from .validation import ProofValidationError, ProofValidator
 
@@ -75,6 +76,7 @@ def create_proof(
     """
     content_hash = GWylCanonical.hash(message, profile=profile)
     plain_hash = GWylCanonical.plain_hash(message, profile=profile)
+    signed = snapshot(message, profile)
     ts = _utcnow_iso()
 
     # SPRINT 5.3.2: Extract EML From header for privacy metadata
@@ -150,6 +152,7 @@ def create_proof(
                 "decides": False,
             }
         },
+        "signed_content": signed,
         "signer": signer_data,
         "policy": policy_data,
         "sigstore": {

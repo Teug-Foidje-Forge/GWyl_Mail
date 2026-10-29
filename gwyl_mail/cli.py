@@ -34,6 +34,7 @@ from .itsme import (
 )
 from .ots_manager import OTSManager
 from .proof_route import store_package
+from .signed_content import classify_addition
 
 
 def cmd_canonical(args: argparse.Namespace) -> int:
@@ -401,6 +402,10 @@ def _has(cmd: str) -> bool:
 # are looked up on their prefix. Printed to stderr so stdout stays pure JSON.
 REASON_DESCRIPTIONS: Dict[str, str] = {
     "canonical_ok": "le contenu du message correspond exactement au hash de la preuve",
+    "signed_text_intact": "le texte signé est intact ; un serveur a ajouté du texte autour",
+    "signed_text_modified": "le texte signé a été coupé ou modifié",
+    "text_added_before": "du texte a été ajouté avant le texte signé",
+    "text_added_after": "du texte a été ajouté après le texte signé",
     "canonical_mismatch": "le contenu du message DIFFÈRE du hash de la preuve (message modifié ou profil de canonicalisation inadapté)",
     "plain_ok": "le texte brut et les pièces jointes correspondent à la seconde empreinte ; elle ne décide pas",
     "plain_mismatch": "le texte brut ou une pièce jointe diffère de la seconde empreinte",
@@ -598,7 +603,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         if canonical_ok:
             reasons.append(f"canonical_ok(profile={effective_profile})")
         else:
-            reasons.append(f"canonical_mismatch(profile={effective_profile})")
+            addition = classify_addition(proof, msg, effective_profile, dsse_signed)
+            if addition is not None and addition[0] == "intact":
+                canonical_ok = True
+                reasons.extend(addition[1])
+            else:
+                reasons.append(f"canonical_mismatch(profile={effective_profile})")
+                if addition is not None:
+                    reasons.extend(addition[1])
         plain_section = (proof.get("diagnostic") or {}).get("plain") or {}
         plain_expected = plain_section.get("content_hash")
         if isinstance(plain_expected, str) and len(plain_expected) == 64:
