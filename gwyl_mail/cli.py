@@ -25,7 +25,13 @@ from .eml_io import (
     inject_proof,
     strip_proof,
 )
-from .itsme import ItsmeNotConnected, UnavailableApp, evaluate_traveling
+from .itsme import (
+    ItsmeNotConnected,
+    UnavailableApp,
+    evaluate_traveling,
+    itsme_enabled,
+    set_itsme_enabled,
+)
 from .ots_manager import OTSManager
 from .proof_route import store_package
 
@@ -261,17 +267,36 @@ def cmd_sign(args: argparse.Namespace) -> int:
 
 
 def cmd_notarize(args: argparse.Namespace) -> int:
-    """Ask itsme. Stop, without a proof, until the phone application exists.
+    """Use itsme only when the user has turned it on. Otherwise do nothing.
 
     There is no flag that can answer yes or no in the sender's place.
     """
     del args
+    if not itsme_enabled():
+        print(
+            "itsme n'est pas activé. sign et check fonctionnent sans vérification d'identité.",
+            file=sys.stderr,
+        )
+        return 0
     try:
         UnavailableApp().sign("0" * 64)
     except ItsmeNotConnected:
-        print("itsme n'est pas branché. Aucune preuve émise.", file=sys.stderr)
+        print(
+            "itsme est activé, mais l'application n'est pas branchée. Aucune preuve émise.",
+            file=sys.stderr,
+        )
         return 2
     return 2
+
+
+def cmd_itsme(args: argparse.Namespace) -> int:
+    switch = getattr(args, "switch", "status")
+    if switch == "on":
+        set_itsme_enabled(True)
+    elif switch == "off":
+        set_itsme_enabled(False)
+    print("activé" if itsme_enabled() else "désactivé")
+    return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -897,6 +922,10 @@ def main() -> int:
     nz.add_argument("eml")
     nz.add_argument("--out", "-o", required=True, help="Output EML path")
     nz.set_defaults(func=cmd_notarize)
+
+    it = sub.add_parser("itsme", help="Turn optional identity verification on or off")
+    it.add_argument("switch", nargs="?", choices=["on", "off", "status"], default="status")
+    it.set_defaults(func=cmd_itsme)
 
     ck = sub.add_parser("check", help="Verify a received message against its embedded proof")
     ck.add_argument("eml")

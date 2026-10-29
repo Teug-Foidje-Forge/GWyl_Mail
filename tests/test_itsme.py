@@ -144,10 +144,26 @@ def test_a_changed_body_is_refused(
     assert report["canonical"] is False
 
 
-def test_notarize_command_cannot_answer_for_the_user(capsys: pytest.CaptureFixture[str]) -> None:
+def test_itsme_is_off_unless_the_user_turns_it_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert cli.cmd_itsme(SimpleNamespace(switch="status")) == 0
+    assert capsys.readouterr().out.strip() == "désactivé"
+    rc = cli.cmd_notarize(SimpleNamespace(eml="draft.eml", out="out.eml"))
+    assert rc == 0
+    assert "n'est pas activé" in capsys.readouterr().err
+    assert not Path("out.eml").exists()
+
+    assert cli.cmd_itsme(SimpleNamespace(switch="on")) == 0
+    assert capsys.readouterr().out.strip() == "activé"
     rc = cli.cmd_notarize(SimpleNamespace(eml="draft.eml", out="out.eml"))
     assert rc == 2
-    assert "n'est pas branché" in capsys.readouterr().err
+    assert "pas branchée" in capsys.readouterr().err
+    assert not Path("out.eml").exists()
+
+    assert cli.cmd_itsme(SimpleNamespace(switch="off")) == 0
+    assert capsys.readouterr().out.strip() == "désactivé"
 
 
 def test_qualified_only_when_the_certificate_chains_to_the_anchor(

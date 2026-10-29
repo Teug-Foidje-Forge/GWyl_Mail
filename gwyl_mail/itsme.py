@@ -25,6 +25,20 @@ from .eml_io import strip_proof
 ITSME_FILENAME = "gwylitsme.json"
 ATTESTATION_DIR = Path(".gwyl_mail/attestations")
 TRUST_ANCHOR_DIR = Path(".gwyl_mail/itsme-trust")
+ENABLED_FILE = Path(".gwyl_mail/itsme.enabled")
+
+
+def itsme_enabled(path: Path = ENABLED_FILE) -> bool:
+    """Identity verification is off until the user turns it on."""
+    return path.is_file()
+
+
+def set_itsme_enabled(on: bool, path: Path = ENABLED_FILE) -> None:
+    if on:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("on\n", encoding="ascii")
+    elif path.is_file():
+        path.unlink()
 
 
 class ItsmeNotConnected(Exception):
