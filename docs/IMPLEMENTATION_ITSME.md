@@ -20,9 +20,10 @@ Sans contrat avec itsme, le logiciel ne peut pas ouvrir l'application ni vérifi
 - `gwyl-mail notarize` appelle une application. Aujourd'hui cette application est `UnavailableApp`. La commande s'arrête, code 2, et n'écrit aucune preuve.
 - Une application de test, invisible dans la commande, signe un oui ou un non. Elle ne peut pas être activée par un argument.
 - Toute réponse signée est enregistrée dans `.gwyl_mail/attestations/<hash>.json`. Pas d'adresse dedans.
-- Un oui ajoute la pièce `gwylitsme.json`, liée à l'empreinte canonique. `check` vérifie cette liaison. La signature est marquée `unverified` : ce n'est pas une signature qualifiée tant que le certificat itsme n'est pas vérifié.
+- Un oui ajoute la pièce `gwylitsme.json`, liée à l'empreinte canonique. `check` vérifie cette liaison.
+- `qualified` n'est écrit que si la signature vérifie avec le certificat, et que ce certificat est émis par une ancre présente dans `.gwyl_mail/itsme-trust/*.pem`. L'ancre n'est jamais prise dans le message. Sans ancre, ou si la signature ne vérifie pas, le résultat reste `unverified`.
 - Un non réécrit le message tel qu'il était. `check` n'y trouve pas de preuve. Si un refus est quand même joint au message, `check` le refuse.
 
 ## Étape suivante, pas maintenant
 
-Brancher l'application réelle, vérifier la signature avec son certificat, et seulement alors écrire `signer.assurance = qualified` sur un oui. Le numéro de registre national ne part pas.
+Ouvrir l'application itsme réelle demande les identifiants partenaire (contrat itsme Sign, hash envoyé à leur API, certificat renvoyé). Ce dépôt ne les invente pas. Quand ils sont là, le certificat d'émission itsme se place dans `.gwyl_mail/itsme-trust/`. Le numéro de registre national ne part pas.

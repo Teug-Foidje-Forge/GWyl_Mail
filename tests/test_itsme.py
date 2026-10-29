@@ -148,3 +148,75 @@ def test_notarize_command_cannot_answer_for_the_user(capsys: pytest.CaptureFixtu
     rc = cli.cmd_notarize(SimpleNamespace(eml="draft.eml", out="out.eml"))
     assert rc == 2
     assert "n'est pas branché" in capsys.readouterr().err
+
+
+def test_qualified_only_when_the_certificate_chains_to_the_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    from cryptography.x509.oid import NameOID
+
+    from gwyl_mail.itsme import choice_payload, evaluate_traveling
+
+    monkeypatch.chdir(tmp_path)
+    now = datetime.now(timezone.utc)
+    anchor_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    anchor_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Anchor")])
+    anchor = (
+        x509.CertificateBuilder()
+        .subject_name(anchor_name)
+        .issuer_name(anchor_name)
+        .public_key(anchor_key.public_key())
+        .serial_number(1)
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=2))
+        .sign(anchor_key, hashes.SHA256())
+    )
+    leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    leaf = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Holder")]))
+        .issuer_name(anchor_name)
+        .public_key(leaf_key.public_key())
+        .serial_number(2)
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=2))
+        .sign(anchor_key, hashes.SHA256())
+    )
+
+    class CertifiedApp(ScriptedApp):
+        def sign(self, content_hash: str) -> tuple[str, bytes]:
+            payload = choice_payload("accepted", content_hash)
+            signature = leaf_key.sign(payload, padding.PKCS1v15(), hashes.SHA256())
+            return "accepted", signature
+
+        def certificate(self) -> bytes:
+            return leaf.public_bytes(serialization.Encoding.PEM)
+
+    sent, _record = notarize_message(_draft(), CertifiedApp("accepted"))
+    without = evaluate_traveling(sent, anchors=[])
+    assert without is not None
+    assert without[1]["assurance"] == "unverified"
+    with_anchor = evaluate_traveling(sent, anchors=[anchor])
+    assert with_anchor is not None
+    assert with_anchor[0] == 0
+    assert with_anchor[1]["assurance"] == "qualified"
+
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    other = (
+        x509.CertificateBuilder()
+        .subject_name(anchor_name)
+        .issuer_name(anchor_name)
+        .public_key(other_key.public_key())
+        .serial_number(3)
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=2))
+        .sign(other_key, hashes.SHA256())
+    )
+    rejected = evaluate_traveling(sent, anchors=[other])
+    assert rejected is not None
+    assert rejected[1]["assurance"] == "unverified"
