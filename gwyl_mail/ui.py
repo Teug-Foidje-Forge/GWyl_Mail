@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 from .cli import cmd_check, cmd_sign
 from .doctor import cmd_doctor
 from .itsme import answer_from_caller
+from .outbound import OutboundError, load_account, prepare_and_send, public_account, save_account
 
 MAX_BODY = 20 * 1024 * 1024
 STATIC = Path(__file__).parent / "ui_static" / "index.html"
@@ -140,6 +141,12 @@ class Handler(BaseHTTPRequestHandler):
                 report = {"ok": False, "raw": text}
             self._json(200 if rc == 0 else 200, report)
             return
+        if path == "/api/account":
+            try:
+                self._json(200, public_account(load_account()))
+            except OutboundError:
+                self._json(200, {"password_set": False})
+            return
         self._json(404, {"error": "not_found"})
 
     def do_POST(self) -> None:  # noqa: N802
@@ -149,6 +156,9 @@ class Handler(BaseHTTPRequestHandler):
         ctype = self.headers.get("Content-Type", "")
         body = self._read_body()
         if body is None:
+            return
+        if path in ("/api/account", "/api/send"):
+            self._json_action(path, body)
             return
         if path not in ("/api/check", "/api/sign"):
             self._json(404, {"error": "not_found"})
@@ -212,6 +222,38 @@ class Handler(BaseHTTPRequestHandler):
             # A caller-supplied itsme answer is not the user. Discard it.
             answer_from_caller(fields.get("itsme"))
             self._send(200, out.read_bytes(), "message/rfc822")
+
+    def _json_action(self, path: str, body: bytes) -> None:
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self._json(400, {"error": "expected_json"})
+            return
+        if not isinstance(payload, dict):
+            self._json(400, {"error": "expected_json"})
+            return
+        if path == "/api/account":
+            try:
+                save_account(payload)
+            except (OutboundError, TypeError, ValueError) as exc:
+                code = exc.code if isinstance(exc, OutboundError) else "invalid_account"
+                self._json(400, {"error": code})
+                return
+            self._json(200, public_account(load_account()))
+            return
+        allow = bool(payload.get("allow_degraded"))
+        try:
+            prepare_and_send(
+                sender=str(payload.get("from", "")),
+                recipient=str(payload.get("to", "")),
+                subject=str(payload.get("subject", "")),
+                body=str(payload.get("body", "")),
+                allow_degraded=allow,
+            )
+        except OutboundError as exc:
+            self._json(422, {"error": exc.code})
+            return
+        self._json(200, {"sent": True})
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
