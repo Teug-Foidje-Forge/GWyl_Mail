@@ -146,6 +146,10 @@ function bindDrop(zoneId, inputId, key) {
 bindDrop("drop-check", "file-check", "check");
 bindDrop("drop-sign", "file-sign", "sign");
 
+function esc(value) {
+  return String(value).replace(/[&<>]/g, (ch) => ({"&": "&", "<": "<", ">": ">"}[ch]));
+}
+
 function pills(data) {
   if (!data || data.error) return "";
   const bits = [
@@ -153,10 +157,22 @@ function pills(data) {
     ["Texte brut", data.plain],
     ["Preuve signée", data.dsse_signed],
     ["Sigstore", data.sigstore_bundle],
-    ["Bitcoin", data.ots]
+    ["Bitcoin", data.ots],
+    ["Horodatage", data.rfc3161]
   ].filter(([, value]) => value !== null && value !== undefined);
   const note = data.html_differs ? `<p class="pill warn">Le texte brut correspond. Le HTML non. Refusé.</p>` : "";
   return note + bits.map(([name, ok]) => `<span class="pill ${ok ? "ok" : "bad"}">${name}: ${ok ? "oui" : "non"}</span>`).join("");
+}
+
+function signedText(data) {
+  const view = data && data.signed_view;
+  if (!view) return "";
+  if (!view.trusted) return `<p class="pill warn">Preuve non signée : le texte stocké n'est pas affiché comme attesté.</p>`;
+  const parts = (view.parts || []).map((part) => `<p><strong>${esc(part.type || "")}</strong></p><pre>${esc(part.text || "")}</pre>`).join("");
+  const before = view.before ? `<p class="pill warn">Ajouté avant</p><pre>${esc(view.before)}</pre>` : "";
+  const after = view.after ? `<p class="pill warn">Ajouté après</p><pre>${esc(view.after)}</pre>` : "";
+  const state = view.intact ? `<p class="pill ok">Texte signé</p>` : `<p class="pill bad">Texte signé modifié</p>`;
+  return state + before + parts + after;
 }
 
 document.getElementById("run-check").onclick = async () => {
@@ -169,7 +185,7 @@ document.getElementById("run-check").onclick = async () => {
   const res = await fetch("/api/check", {method: "POST", headers: CLIENT, body});
   const data = await res.json();
   const klass = res.ok ? "ok" : "bad";
-  out.innerHTML = `<p><span class="pill ${klass}">${res.ok ? "Accepté" : "Refusé"}</span></p>${pills(data)}<pre>${JSON.stringify(data, null, 2)}</pre>`;
+  out.innerHTML = `<p><span class="pill ${klass}">${res.ok ? "Accepté" : "Refusé"}</span></p>${pills(data)}${signedText(data)}<pre>${JSON.stringify(data, null, 2)}</pre>`;
 };
 
 document.getElementById("run-sign").onclick = async () => {

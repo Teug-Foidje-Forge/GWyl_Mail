@@ -1,15 +1,23 @@
 {
   "manifest_version": 2,
-  "name": "GWyl Mail — vérifier",
-  "version": "0.3.1",
-  "description": "Vérifie le message affiché auprès de l'interface locale GWyl Mail.",
+  "name": "GWyl Mail",
+  "version": "0.4.1",
+  "description": "Joint la preuve au message, puis laisse Thunderbird l'envoyer.",
   "browser_specific_settings": {
     "gecko": {
       "id": "gwyl-verify@gwyl.mail",
       "strict_min_version": "115.0"
     }
   },
-  "permissions": ["messagesRead", "http://127.0.0.1:8765/*"],
+  "permissions": [
+    "compose",
+    "messagesRead",
+    "notifications",
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
   "message_display_action": {
     "default_title": "Vérifier GWyl",
     "default_popup": "popup.html"

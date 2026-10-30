@@ -20,7 +20,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .cli import cmd_check, cmd_sign
+from .compose_attach import ComposeError, message_from_compose
 from .doctor import cmd_doctor
+from .eml_io import extract_proof
 from .itsme import answer_from_caller
 
 MAX_BODY = 20 * 1024 * 1024
@@ -150,6 +152,9 @@ class Handler(BaseHTTPRequestHandler):
         body = self._read_body()
         if body is None:
             return
+        if path == "/api/compose-proof":
+            self._compose_proof(body)
+            return
         if path not in ("/api/check", "/api/sign"):
             self._json(404, {"error": "not_found"})
             return
@@ -212,6 +217,49 @@ class Handler(BaseHTTPRequestHandler):
             # A caller-supplied itsme answer is not the user. Discard it.
             answer_from_caller(fields.get("itsme"))
             self._send(200, out.read_bytes(), "message/rfc822")
+
+    def _compose_proof(self, body: bytes) -> None:
+        try:
+            fields = json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self._json(400, {"error": "expected_json"})
+            return
+        if not isinstance(fields, dict):
+            self._json(400, {"error": "expected_json"})
+            return
+        try:
+            draft = message_from_compose(fields)
+        except ComposeError as exc:
+            self._json(400, {"error": exc.code})
+            return
+        with tempfile.TemporaryDirectory(prefix="gwyl-compose-") as tmp:
+            folder = Path(tmp)
+            src = folder / "draft.eml"
+            out = folder / "signed.eml"
+            src.write_bytes(draft.as_bytes())
+            rc, _text = _capture(
+                cmd_sign,
+                argparse.Namespace(
+                    eml=str(src),
+                    identity=str(draft["From"]),
+                    out=str(out),
+                    no_dsse=False,
+                    allow_degraded=False,
+                    profile="strict",
+                ),
+            )
+            if rc != 0 or not out.is_file():
+                self._json(422, {"error": "sign_refused", "exit_code": rc})
+                return
+            extracted = extract_proof(out.read_bytes())
+        if extracted is None or extracted.ambiguous or not extracted.envelope:
+            self._json(422, {"error": "proof_missing"})
+            return
+        self._send(
+            200,
+            json.dumps(extracted.envelope).encode("utf-8"),
+            "application/json",
+        )
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import shutil
 import subprocess
@@ -34,7 +35,8 @@ from .itsme import (
 )
 from .ots_manager import OTSManager
 from .proof_route import store_package
-from .signed_content import classify_addition
+from .rfc3161 import TSA_CA_FILE, TimestampError, verify_token
+from .signed_content import classify_addition, signed_view
 
 
 def cmd_canonical(args: argparse.Namespace) -> int:
@@ -406,6 +408,9 @@ REASON_DESCRIPTIONS: Dict[str, str] = {
     "signed_text_modified": "le texte signé a été coupé ou modifié",
     "text_added_before": "du texte a été ajouté avant le texte signé",
     "text_added_after": "du texte a été ajouté après le texte signé",
+    "transport_headers": "Date ou Message-ID a été posé par le client ou un serveur, pas par le texte signé",
+    "rfc3161_ok": "l'horodatage RFC 3161 couvre cette empreinte",
+    "rfc3161_failed": "le jeton RFC 3161 ne couvre pas cette empreinte, ou le certificat n'est pas reconnu",
     "canonical_mismatch": "le contenu du message DIFFÈRE du hash de la preuve (message modifié ou profil de canonicalisation inadapté)",
     "plain_ok": "le texte brut et les pièces jointes correspondent à la seconde empreinte ; elle ne décide pas",
     "plain_mismatch": "le texte brut ou une pièce jointe diffère de la seconde empreinte",
@@ -541,6 +546,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
     # signature AND that signature verifies. An unsigned envelope is a
     # legitimate degraded proof but MUST be reported as not signed.
     dsse_signed = False
+    signed_view_data: Optional[Dict[str, Any]] = None
+    rfc3161_ok: Optional[bool] = None
+    rfc3161_time: Optional[str] = None
     if "payload" in proof_data and "payloadType" in proof_data:
         # DSSE envelope detected
         envelope_has_signature = bool(proof_data.get("signatures"))
@@ -611,6 +619,20 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 reasons.append(f"canonical_mismatch(profile={effective_profile})")
                 if addition is not None:
                     reasons.extend(addition[1])
+        view = signed_view(proof, msg, effective_profile, dsse_signed)
+        if view is not None:
+            signed_view_data = view
+        token_b64 = str((proof.get("rfc3161") or {}).get("token") or "")
+        if token_b64:
+            try:
+                rfc3161_time = verify_token(
+                    base64.b64decode(token_b64), expected_hash or "", TSA_CA_FILE
+                )
+                rfc3161_ok = True
+                reasons.append("rfc3161_ok")
+            except (TimestampError, ValueError):
+                rfc3161_ok = False
+                reasons.append("rfc3161_failed")
         plain_section = (proof.get("diagnostic") or {}).get("plain") or {}
         plain_expected = plain_section.get("content_hash")
         if isinstance(plain_expected, str) and len(plain_expected) == 64:
@@ -826,6 +848,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         "sigstore_bundle": bundle_ok,
         "ots": ots_ok,
         "dsse_signed": dsse_signed,
+        "rfc3161": rfc3161_ok,
+        "rfc3161_time": rfc3161_time,
+        "signed_view": signed_view_data,
         "trust_level": trust,
         "reasons": reasons,
         "identity": bundle_identity,

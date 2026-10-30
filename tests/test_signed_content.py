@@ -92,3 +92,36 @@ def test_a_character_added_at_the_end_is_an_addition_not_a_silent_match() -> Non
     kind, reasons = classify_addition(proof, received, "strict", signature_ok=True)
     assert kind == "intact"
     assert "text_added_after" in reasons
+
+
+def test_a_date_assigned_by_the_client_does_not_change_the_signed_text() -> None:
+    message = EmailMessage()
+    message["From"] = "alice@example.com"
+    message["To"] = "bob@example.com"
+    message["Subject"] = "Facture"
+    message.set_content("Montant : 10\n")
+    received = _letter("Montant : 10\n")
+    result = assess(snapshot(message), received)
+    assert result["intact"] is True
+    assert result["additions"] == ["transport_headers"]
+
+
+def test_a_changed_subject_is_a_modification() -> None:
+    original = _letter("Montant : 10\n")
+    received = _letter("Montant : 10\n")
+    received.replace_header("Subject", "Autre")
+    assert assess(snapshot(original), received)["intact"] is False
+
+
+def test_the_view_shows_the_signed_text_and_the_addition() -> None:
+    from gwyl_mail.signed_content import signed_view
+
+    original = _letter("Montant : 10\n")
+    received = _letter("Montant : 10\n\nConfidentiel.\n")
+    proof = {"signed_content": snapshot(original)}
+    hidden = signed_view(proof, received, "strict", signature_ok=False)
+    assert hidden is not None and hidden["trusted"] is False and hidden["parts"] == []
+    shown = signed_view(proof, received, "strict", signature_ok=True)
+    assert shown is not None and shown["trusted"] is True and shown["intact"] is True
+    assert shown["parts"][0]["text"].startswith("Montant : 10")
+    assert "Confidentiel" in shown["after"]

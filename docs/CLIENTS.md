@@ -2,7 +2,10 @@
 
 GWyl Mail n'est pas un client mail. Il ne se connecte pas à une boîte et il ne remplace pas l'éditeur.
 
-Thunderbird peut s'en servir, parce qu'un greffon voit le message que Thunderbird va envoyer. Le formatage et le compte restent ceux de Thunderbird.
+Thunderbird peut s'en servir. À l'envoi, le greffon joint la preuve au message déjà écrit et laisse Thunderbird l'envoyer. Si la preuve ne peut pas être signée, l'envoi est annulé.
+
+L'heure, quand elle est là, vient d'un jeton RFC 3161. Sans adresse de serveur d'horodatage dans `GWYL_TSA_URL` ou `.gwyl_mail/tsa.url`, la preuve n'en a pas. Le certificat de ce serveur se place dans `.gwyl_mail/tsa-ca.pem`.
+
 
 Gmail ne le peut pas aujourd'hui. Outlook peut, par un greffon, mais ce n'est pas mesuré.
 
